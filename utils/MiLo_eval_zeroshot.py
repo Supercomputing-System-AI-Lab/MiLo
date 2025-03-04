@@ -14,17 +14,13 @@ from MiLo.core.quantize import *
 from transformers import AutoTokenizer
 from MiLo.core.quantize import *
 from MiLo.models.hf.mixtral import MixtralMiLo
+from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
 
 LM_EVAL_TASK_KWARGS_DICT = {
-    # "winogrande": {"task": "winogrande", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
-    # "copa": {"task": "copa", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
-    # "openbookqa": {"task": "openbookqa", "num_fewshot": 0, "batch_size": 128, "metric": "acc_norm"},
-    "hellaswag": {"task": "hellaswag", "num_fewshot": 0, "batch_size": 128, "metric": "acc_norm"},
+
+    # "hellaswag": {"task": "hellaswag", "num_fewshot": 0, "batch_size": 128, "metric": "acc_norm"},
     "lambada_openai": {"task": "lambada_openai", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
-    # "rte": {"task": "rte", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
     "piqa": {"task": "piqa", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
-    # "mmlu": {"task": "mmlu", "num_fewshot": 5, "batch_size": 16, "metric": "acc"},
-    # "triQA": {"task": "triviaqa", "num_fewshot": 5, "batch_size": 16, "metric": "exact_match"},
 }
 
 def main():
@@ -37,8 +33,10 @@ def main():
     
     if "Mixtral" in args.model_id:
         model_id = "mistralai/Mixtral-8x7B-v0.1" 
+        AutoMiLoHFModel = MixtralMiLo
     elif "DeepSeek" in args.model_id:
         model_id = "deepseek-ai/deepseek-moe-16b-base"
+        AutoMiLoHFModel = DeepSeekMoEMiLo
     else:
         NotImplementedError("This model is not implemented yet")
 
@@ -48,7 +46,7 @@ def main():
     with open(f"{args.base_dir}/ranks.json", "r", encoding="utf-8") as f:
         ranks  = json.load(f)
 
-    model = MixtralMiLo.from_quantized(quant_model_dir,LoRC_weight_path=lorc_dir,
+    model = AutoMiLoHFModel.from_quantized(quant_model_dir,LoRC_weight_path=lorc_dir,
                                         LoRC_dtype = lorc_dtype,
                                         ranks=ranks)
     tokenizer    = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)

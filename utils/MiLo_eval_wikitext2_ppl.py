@@ -1,10 +1,9 @@
-# import sys
-# sys.path.append("/home/exouser/MiLo/MiLo_v0")
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from MiLo.core.quantize import *
-from MiLo.models.hf.mixtral import MixtralMiLo as AutoMiLoHFModel
+from MiLo.models.hf.mixtral import MixtralMiLo
+from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
 from MiLo.engine.hf import AutoTokenizer
 from evaluation.eval_wikitext2_ppl import eval_perplexity
 import time
@@ -21,8 +20,10 @@ def main():
     
     if "Mixtral" in args.model_id:
         model_id = "mistralai/Mixtral-8x7B-v0.1" 
+        AutoMiLoHFModel = MixtralMiLo
     elif "DeepSeek" in args.model_id:
         model_id = "deepseek-ai/deepseek-moe-16b-base"
+        AutoMiLoHFModel = DeepSeekMoEMiLo
     else:
         NotImplementedError("This model is not implemented yet")
 
