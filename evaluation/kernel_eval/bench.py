@@ -81,8 +81,8 @@ MODELS = { #(k,n)
        (4 * 256 * SMS, 256 * SMS)
 ],
  'deepseek' : [(2048, 11008),(11008,2048),(2048, 11008)],
-    'mixtral' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
-     'arctic' : [(7168,4864),(4864, 7168),(7168,4864)],
+'mixtral' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
+'arctic' : [(7168,4864),(4864, 7168),(7168,4864)],
    'Llama65B': [
         (8192, 3 * 8192),
         (8192, 8192),
@@ -101,16 +101,11 @@ MODELS = { #(k,n)
 # 'falocon180B2' : [(14848 * 5, 14848)]
 }
 
-# Set to true in order to run a more complete benchmark sweep; the default is reproduce README experiments
-
-
-#2.43, 3.44
 for groupsize in [64] :
     print()
     dev = torch.device('cuda:0')
     for model, layers in MODELS.items():
         print(model)
-        
         batchsizes = [1,16,32]
         for batch in batchsizes: 
             for sms in [108]:
@@ -118,8 +113,6 @@ for groupsize in [64] :
                 tot_d = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
 
                 for layer in layers:
-                    #B_ref, B1, B2, s, z = gen_quant3(layer[0], layer[1], groupsize, tile_shape)
-                    tile_shape = 0
                     A, B1, B2, C, B_ref, s, z = get_problem_int3(batch, layer[1], layer[0], groupsize, tile_shape)
                     res_d = benchmark_dense(A, B_ref, C)
                     res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
