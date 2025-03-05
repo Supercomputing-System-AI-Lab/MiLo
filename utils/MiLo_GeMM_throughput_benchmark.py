@@ -66,7 +66,7 @@ else:
 
 MODELS = { #(k,n)
    'ideal': [
-       (4 * 256 * SMS, 256 * SMS)
+       (4 * 256 * SMS, 256 * SMS)  
 ],
  'deepseek' : [(2048, 11008),(11008,2048),(2048, 11008)],
 'mixtral' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
@@ -103,7 +103,10 @@ for groupsize in [64] :
                 for layer in layers:
                     A, B1, B2, C, B_ref, s, z = get_problem(batch, layer[1], layer[0], groupsize)
                     res_d = benchmark_dense(A, B_ref, C)
-                    res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
+                    if model == "Falcon180B":
+                        res_q = benchmark_quant(A, B1, B2, C, s,z,64, 256, SMS)
+                    else:
+                        res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
                     tot_q['s'] += res_q['s']
                     tot_q['memory'] += res_q['GB']
                     tot_q['TFLOP'] += res_q['TFLOP']

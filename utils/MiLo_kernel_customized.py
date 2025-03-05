@@ -51,7 +51,7 @@ def main():
     parser = argparse.ArgumentParser(description="Use MiLo kernel to perform FP16xINT3 GeMM with customized settings")
     parser.add_argument('--batchsize', type=int, required=True, help="Batch Size")
     parser.add_argument('--hidden_dimension', type=str, required=True, help="Model hidden dimension")
-    parser.add_argument('--mlp _intermediate_dimension', type=int, default=None, help="MLP intermediate dimension")
+    parser.add_argument('--mlp_intermediate_dimension', type=int, required=True, help="MLP intermediate dimension")
     parser.add_argument('--tile_shape', type=str, choices=["64,256", "128,128", "256,64"], default="128,128", help="Set tile shape. Options: '64,256', '128,128', '256,64'")
 
     args = parser.parse_args()

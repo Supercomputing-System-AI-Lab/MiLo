@@ -1,0 +1,4 @@
+# ninja log v5
+3	13959	1741207681652002505	/u/bhuang4/zelei_milo/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-310/milo/milo_cuda_kernel.o	c7f564d8a164ab8b
+5	13969	1741207681667011952	/u/bhuang4/zelei_milo/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-310/milo/milo_cuda_with_zero_kernel.o	b87c12fddb27e134
+2	62239	1741207729919243507	/u/bhuang4/zelei_milo/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-310/milo/milo_cuda.o	994fd38f6bb49a0f

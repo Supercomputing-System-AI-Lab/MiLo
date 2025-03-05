@@ -7,10 +7,10 @@ import milo
 
 torch.cuda.empty_cache()  # Clears the GPU cache
 
-seed = 90 #16 llama
-print("seed : ",seed)
+print("it would print the test setting ")
 np.random.seed(seed)
 torch.random.manual_seed(seed)
+print("seed : ",seed)
 
 DEV = torch.device('cuda:0')
 
