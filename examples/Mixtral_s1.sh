@@ -4,7 +4,7 @@
 #MiLo-s1: dense layer rank 512, avg sparse layer rank 32 setted according to Kurtosis value
 
 
-save_dir="$1"
+save_dir="/scratch/bcjw/zshao3/huggingface/models--mistralai--Mixtral-8x7B-v0.1"
 
 echo "===== MiLo Quantization ====="
 python utils/MiLo_quant_main.py --base_dir ${save_dir} --model_id Mixtral --dense_rank 512 --kurtosis_flag s1

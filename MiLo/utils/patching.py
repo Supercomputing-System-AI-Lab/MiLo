@@ -18,6 +18,12 @@ try:
 except Exception:
     patch_hqq_to_bitblas = None
     print(colored('Warning: failed to import the BitBlas backend. Check if BitBlas is correctly installed if you want to use the bitblas backend (https://github.com/microsoft/BitBLAS).','yellow'))
+try:
+   from ..backends.milo import patch_hqq_to_miloWithZeros
+except Exception:
+       patch_hqq_to_miloWithZeros = None
+       print(colored('Warning: failed to import the MiLoWithZero backend. Check if milo is correctly installed if you want to use the MiLo backend (in MiLo/kernels), please run setup.py install first.', 'yellow'))
+
 
 def patch_linearlayers(model, fct, patch_param=None, verbose=False):
     base_class = model.base_class if (hasattr(model, "base_class")) else AutoHQQHFModel
@@ -124,6 +130,9 @@ def prepare_for_inference(model, allow_merge=False, backend="default", verbose=F
         cleanup()
     if backend == "marlin" and (patch_hqq_to_marlin is not None):
         patch_linearlayers(model, patch_hqq_to_marlin, verbose=verbose)
+        cleanup()
+    if backend == "milo" and (patch_hqq_to_miloWithZeros is not None):
+        patch_linearlayers(model, patch_hqq_to_miloWithZeros, verbose=verbose)
         cleanup()
 
     patch_linearlayers(
