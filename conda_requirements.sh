@@ -1,12 +1,5 @@
 #!/bin/bash
 
-# Ensure conda is initialized
-if ! command -v conda &> /dev/null; then
-    echo "Conda is not installed or not in the PATH. Please install Conda first."
-    exit 1
-fi
-
-# Install system libraries and dependencies (Conda-only)
 conda install -y -c conda-forge \
     _libgcc_mutex=0.1 \
     _openmp_mutex=4.5 \
@@ -51,4 +44,7 @@ conda install -y -c nvidia \
     libnpp=12.2.5.2 \
     nsight-compute=2024.1.0.13
 
-echo "✅ Conda-only packages have been successfully installed in the '$ENV_NAME' environment!"
+pip install -r requirements.txt
+
+
+
