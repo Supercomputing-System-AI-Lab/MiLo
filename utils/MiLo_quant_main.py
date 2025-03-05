@@ -79,7 +79,7 @@ def main():
                 k = 3
             else:
                 NotImplementedError("This strategy is not implemented yet")
-            with open('examples/kurtosis_mixtral.txt', 'r') as file:
+            with open('utils/kurtosis_mixtral.txt', 'r') as file:
                 lines = file.readlines()
             for line in lines:
                 parts = line.split(':')
