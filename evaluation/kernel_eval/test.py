@@ -43,7 +43,8 @@ def gen_quant3(m, n, groupsize=64):
     linear = nn.Linear(m, n)
     linear.weight.data = ref.t()
     # Workaround to test some special cases that are forbidden by the API
-    layer = milo.Layer3bit(m, n, groupsize=groupsize)    layer.k = m
+    layer = milo.Layer3bit(m, n, groupsize=groupsize)    
+    layer.k = m
     layer.n = n
     layer.groupsize = groupsize
     layer.B1 = torch.empty((m // 16, n * 16 * 2 // 32), dtype=torch.int, device=DEV)
@@ -125,8 +126,9 @@ class Test(unittest.TestCase):
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.005)
 
     def test_moe(self):
-        for m in range(1,17):
-            self.run_problem(m,4096, 14336, thread_k, thread_n,64) 
+        for thread_k, thread_n in [(64, 256),(256, 64),(128,128)]:
+            for m in range(1,17):
+                self.run_problem(m,4096, 14336, thread_k, thread_n,64) 
   
     def test_tiles(self):
         print("test_tiles")

@@ -144,7 +144,6 @@ void mul_3bit_with_zeros(
     groupsize,
     dev,
     at::cuda::getCurrentCUDAStream(dev),
-    at::cuda::getCurrentCUDAStream(dev),
     thread_k,
     thread_n,
     sms,

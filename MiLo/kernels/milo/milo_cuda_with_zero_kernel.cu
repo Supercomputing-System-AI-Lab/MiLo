@@ -15,8 +15,8 @@
  */
 
 
-#ifndef MARLIN_CUDA_KERNEL_CUH
-#define MARLIN_CUDA_KERNEL_CUH
+#ifndef MILO_CUDA_WITH_ZERO_KERNEL_CUH
+#define MILO_CUDA_WITH_ZERO_KERNEL_CUH
 
 
 #include <cuda.h>
@@ -53,7 +53,7 @@ using FragA = Vec<half2, 4>;
 using FragB = Vec<half2, 2>;
 using FragC = Vec<float, 4>;
 using FragS = Vec<half2, 1>; // quantization scales
-
+using FragZ = Vec<half2, 1>; 
 using FragB_8 = Vec<FragB, 8>;
 using FragB_2 = Vec<FragB, 2>;
 
@@ -160,17 +160,16 @@ __device__ inline int lop3(int a, int b, int c) {
   return res;
 }
 
-__device__ inline FragB dequant(int& q) {
+__device__ inline FragB dequant_with_zeros(int& q) {
   const int LO = 0x00070007;
   const int HI = 0x00380038;
   const int EX = 0x64006400;
   // Guarantee that the `(a & b) | c` operations are LOP3s.
   int lo = lop3<(0xf0 & 0xcc) | 0xaa>(q, LO, EX);
   int hi = lop3<(0xf0 & 0xcc) | 0xaa>(q, HI, EX);
-  // We want signed int4 outputs, hence we fuse the `-4` symmetric zero point directly into `SUB` and `ADD`.
-  const int SUB = 0x64046404;
+  const int SUB = 0x64006400;
   const int MUL = 0x30003000;
-  const int ADD = 0xd820d820;
+  const int ADD = 0xd800d800;
   FragB frag_b;
   frag_b[0] = __hsub2(
     *reinterpret_cast<half2*>(&lo),
@@ -183,12 +182,12 @@ __device__ inline FragB dequant(int& q) {
   return frag_b;
 }
 
-
 // Multiply dequantized values by the corresponding quantization scale; used only for grouped quantization.
-__device__ inline void scale(FragB& frag_b, FragS& frag_s, int i) {
+__device__ inline void scale_with_zeros(FragB& frag_b, FragS& frag_s, int i, FragZ& frag_z) {
   half2 s = __half2half2(reinterpret_cast<__half*>(&frag_s)[i]);
-  frag_b[0] = __hmul2(frag_b[0], s);
-  frag_b[1] = __hmul2(frag_b[1], s);
+  half2 z = __half2half2(reinterpret_cast<__half*>(&frag_z)[i]);
+  frag_b[0] = __hfma2(frag_b[0], s, z);
+  frag_b[1] = __hfma2(frag_b[1], s, z);
 }
 
 
@@ -234,7 +233,8 @@ __global__ void MiLo(
   const I2* __restrict__ B1, // 3bit quantized weight matrix of shape kxn 
   const int* __restrict__ B2,
         int4* __restrict__ C, // fp16 output buffer of shape mxn
-  const int4* __restrict__ s, // fp16 quantization scales of shape (k/groupsize)xn 
+  const int4* __restrict__ s, // fp16 quantization scales of shape (k/groupsize)xn
+  const int4* __restrict__ z, 
   int  prob_m, // batch dimension m
   int  prob_n, // output dimension n
   int  prob_k, // reduction dimension k
@@ -417,6 +417,7 @@ __global__ void MiLo(
   I2_2 frag_b_quant[2];
   FragC frag_c[thread_m_blocks][4][2];
   FragS frag_s[2][4];
+  FragZ frag_z[2][4];
 
   // Zero accumulators.
   auto zero_accums = [&] () {
@@ -487,11 +488,10 @@ __global__ void MiLo(
     for (int j = 0; j < 3; j++) {
       b_quant = frag_b_quant[k_mod_2][j/2][j%2];
       b_quant_shift = b_quant >> 6;
-      frag_b0 = dequant(b_quant);
-      // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-      scale(frag_b0, frag_s[k_mod_2][j], 0);
-      frag_b1 = dequant(b_quant_shift);
-      scale(frag_b1, frag_s[k_mod_2][j], 1);
+      frag_b0 = dequant_with_zeros(b_quant);
+      scale_with_zeros(frag_b0, frag_s[k_mod_2][j], 0,frag_z[k_mod_2][j]);
+      frag_b1 = dequant_with_zeros(b_quant_shift);
+      scale_with_zeros(frag_b1, frag_s[k_mod_2][j], 1,frag_z[k_mod_2][j]);
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
         mma(frag_a[k_mod_2][i], frag_b0, frag_c[i][j][0]);
@@ -499,13 +499,11 @@ __global__ void MiLo(
       }
       b_quant3 |= (b_quant& 0xf000f000) >> 4*(3-j);
     }   
-    frag_b0 = dequant(b_quant3);
+    frag_b0 = dequant_with_zeros(b_quant3);
     b_quant_shift = b_quant3 >> 6;
-      // If there are no groups, we can just scale the final output once and can avoid doing so for each weight.
-    scale(frag_b0, frag_s[k_mod_2][3], 0);
-    frag_b1 = dequant(b_quant_shift);
-    scale(frag_b1, frag_s[k_mod_2][3], 1);
-    //printf("3,%x , %x, %x,%x, %x, %x \n:", b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
+    scale_with_zeros(frag_b0, frag_s[k_mod_2][3], 0,frag_z[k_mod_2][3]);
+    frag_b1 =  dequant_with_zeros(b_quant_shift);
+    scale_with_zeros(frag_b1, frag_s[k_mod_2][3], 1,frag_z[k_mod_2][3]);
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++) {
       mma(frag_a[k_mod_2][i], frag_b0, frag_c[i][3][0]);
@@ -696,21 +694,17 @@ __global__ void MiLo(
   };
   start_pipes();
   // Main loop.
-   //printf("slice_iters %d, stages%d, \n",slice_iters, stages);
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
-    //printf("before loop\n");
-    //printf("slice_iters %d, stages%d, \n",slice_iters, stages);
+
     #pragma unroll
     for (int pipe = 0; pipe < stages;) {
       #pragma unroll
       for (int k = 0; k < b_sh_wr_iters; k++) {
         fetch_to_registers(k + 1, pipe % stages);
         if (k == b_sh_wr_iters - 2) {
-          //if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters %d, stages%d, \n",slice_iters, stages);
           fetch_to_shared((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
-          //fetch_to_shared_faster((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
           pipe++;
           wait_for_stage();
         }
@@ -719,10 +713,7 @@ __global__ void MiLo(
       slice_iters--;
       if (slice_iters == 0)
         break;
-    }
-      //printf("right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-      //printf("wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-          
+    }      
     a_gl_rd += a_gl_rd_delta_o * stages;
     
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
@@ -730,25 +721,8 @@ __global__ void MiLo(
     if (slice_iters == 0) {
       cp_async_wait<0>();
       bool last = slice_idx == slice_count - 1;
-      // For per-column scales, we only fetch them here in the final step before write-out
-      /*
-      if(threadIdx.x == 0 && blockIdx.x == 0){
-        printf("right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-        printf("wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-      }*/
-      //__syncthreads();
       thread_block_reduce();
 
-      //__syncthreads();
-      //if(threadIdx.x == 0 && blockIdx.x == 0){
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][0][0][0], frag_c[0][0][0][1], frag_c[0][0][0][2], frag_c[0][0][0][3]);
-
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][3][0][0], frag_c[0][3][0][1], frag_c[0][3][0][2], frag_c[0][3][0][3]);
-
-       // printf("thread reduce wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-     // }
-      // __syncthreads();
 
 
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
@@ -757,11 +731,6 @@ __global__ void MiLo(
         global_reduce(slice_idx == 0, last);
         barrier_release(&locks[slice_col], last);
       }
-
-      //if(threadIdx.x == 0 && blockIdx.x == 0){
-      //  printf("global right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-      //  printf("global wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-      //}
 
       if (last) // only the last block in a slice actually writes the result
       {
@@ -815,7 +784,7 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
     MiLo< \
       THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS \
     ><<<blocks, THREADS, SHARED_MEM, stream>>>( \
-      A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, \
+      A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, z_ptr, \
       prob_m, prob_n, prob_k, \
       locks \
     ); \
@@ -824,12 +793,13 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
 const int ERR_PROB_SHAPE = 1;
 const int ERR_KERN_SHAPE = 2;
 
-int milo_cuda(
+int milo_cuda_with_zeros(
   const void* A,
   const void* B1,
   const void* B2,
         void* C,
         void* s,
+        void* z,
   int prob_m,
   int prob_n,
   int prob_k,
@@ -877,6 +847,7 @@ int milo_cuda(
 
   int4* C_ptr = (int4*) C;
   const int4* s_ptr = (const int4*) s;
+  const int4* z_ptr = (const int4*) z;
 
   int cols = prob_n / thread_n;
   int* locks = (int*) workspace;
