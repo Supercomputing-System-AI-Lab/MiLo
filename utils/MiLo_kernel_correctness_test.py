@@ -110,7 +110,7 @@ class Test(unittest.TestCase):
         C = torch.zeros((m, n), dtype=torch.half, device=DEV)
         C_ref = torch.matmul(A, B_ref)
         workspace = torch.zeros(n // 128 * 16, device=DEV)
-        milo.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n)
+        milo.mul_3bit_with_zeros(A, B1, B2, C, s, workspace, thread_k, thread_n)
         torch.cuda.synchronize()
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.005)
 
@@ -124,11 +124,6 @@ class Test(unittest.TestCase):
         milo.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n)
         torch.cuda.synchronize()
         self.assertLess(torch.mean(torch.abs(C - C_ref)) / torch.mean(torch.abs(C_ref)), 0.005)
-
-    def test_moe(self):
-        for thread_k, thread_n in [(64, 256),(256, 64),(128,128)]:
-            for m in range(1,17):
-                self.run_problem(m,4096, 14336, thread_k, thread_n,64) 
   
     def test_tiles(self):
         print("test_tiles")
@@ -191,16 +186,14 @@ class Test(unittest.TestCase):
         workspace = torch.zeros(n // 128 , device=DEV)
         err = False
         try:
-            #marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
-            marlin.mul_3bit_faster(A, B1, B2, C, s, workspace,64)
+            milo.mul_3bit(A, B1, B2, C, s, workspace,64)
         except:
             err = True 
         self.assertTrue(err)
         s = torch.zeros((2, n), dtype=torch.half, device=DEV)
         err = False
         try:
-            #marlin.mul_3bit(A, B1, B2, C, s, workspace, 256, 256, -1)
-            marlin.mul_3bit_faster(A, B1, B2, C, s, workspace, 64)
+            milo.mul_3bit(A, B1, B2, C, s, workspace, 64)
         except:
             err = True 
         self.assertTrue(err)

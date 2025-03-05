@@ -20,19 +20,7 @@ def benchmark(f, warmup=20, iter=500):
     time.sleep(1.)
     return res
 
-def get_problem(m, n, k, groupsize=128):
-    if groupsize == -1:
-        groupsize = k
-    dev = torch.device('cuda:0')
-    A = torch.randn((m, k), dtype=torch.half, device=dev)
-    B = torch.randint(low=-2**31, high=2**31, size=(k * n // 8,), device=dev)
-    B_ref = torch.randn((k, n), dtype=torch.half, device=dev)
-    C = torch.zeros((m, n), dtype=torch.half, device=dev)
-    s = torch.ones((k // groupsize, n), dtype=torch.half, device=dev)
-    torch.cuda.synchronize()
-    return A, B, C, B_ref, s
-
-def get_problem_int3(m, n, k, groupsize=64, tile_shape=0):
+def get_problem(m, n, k, groupsize=64):
     if groupsize == -1:
         groupsize = k
     dev = torch.device('cuda:0')
@@ -113,7 +101,7 @@ for groupsize in [64] :
                 tot_d = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
 
                 for layer in layers:
-                    A, B1, B2, C, B_ref, s, z = get_problem_int3(batch, layer[1], layer[0], groupsize, tile_shape)
+                    A, B1, B2, C, B_ref, s, z = get_problem(batch, layer[1], layer[0], groupsize)
                     res_d = benchmark_dense(A, B_ref, C)
                     res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
                     tot_q['s'] += res_q['s']
