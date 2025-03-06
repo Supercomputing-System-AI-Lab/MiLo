@@ -14,11 +14,13 @@ from transformers import AutoTokenizer
 from MiLo.core.quantize import *
 from MiLo.models.hf.mixtral import MixtralMiLo
 from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
-
+from MiLo.core.quantize import *
 LM_EVAL_TASK_KWARGS_DICT = {
     "mmlu": {"task": "mmlu", "num_fewshot": 5, "batch_size": 16, "metric": "acc"},
     "triQA": {"task": "triviaqa", "num_fewshot": 5, "batch_size": 16, "metric": "exact_match"},
 }
+
+AutoMiLoHFModel = MixtralMiLo
 
 def main():
     parser = argparse.ArgumentParser(description="")

@@ -32,6 +32,11 @@ bash conda_env_setup.sh
 
 Note: Make sure you have CUDA 12.4 compatible GPUs and drivers installed on your system before installation.
 
+## Installation of kernel
+
+```bash
+bash kernel_setup.sh
+```
 
 ## Quick Start
 
@@ -83,6 +88,7 @@ AutoMiLoHFModel.save_quantized(model,
 
 
 
+
 ## Examples
 
 For detailed usage examples and tutorials, please refer to the [examples](examples/) in the repository.
@@ -93,4 +99,4 @@ MIT license
 
 ## Acknowledgments
 
-This project is built on top of [HQQ]([https://github.com/rapidsai/cuvs](https://github.com/mobiusml/hqq)), an optimization based quantiation algorithm library, and [Marlin](https://github.com/IST-DASLab/marlin), a efficient INT4 CUDA kernel. We thank the HQQ and Marlin team for providing this foundation.
+This project is built on top of [HQQ]([https://github.com/rapidsai/cuvs](https://github.com/mobiusml/hqq)), an optimization based quantiation algorithm library, and [Marlin](https://github.com/IST-DASLab/marlin), a efficient fp16xINT4 GeMM CUDA kernel. We thank the HQQ and Marlin team for providing this foundation.
