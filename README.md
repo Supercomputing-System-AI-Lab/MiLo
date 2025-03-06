@@ -81,6 +81,11 @@ AutoMiLoHFModel.quantize_model(model,
 	lorc_dtype=lorc_dtype)
 AutoMiLoHFModel.save_quantized(model, 
 	quant_model_dir)
+
+##enable milo kernel backend
+from MiLo.utils.patching import prepare_for_inference
+prepare_for_inference(model, backend="milo3bitwithzero")
+
 ```
 
 
