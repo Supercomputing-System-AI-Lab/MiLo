@@ -45,6 +45,8 @@ prepare_for_inference(model, backend="milo3bitwithzero")
 #ppl = eval_perplexity(model,tokenizer)
 
 #Adapted from https://huggingface.co/transformers/v4.2.2/perplexity.html
+
+
 def eval_wikitext2(model, tokenizer, max_length=1024, stride=512, verbose=True):
 	model.eval()
 	tokenizer.pad_token     = tokenizer.eos_token 
@@ -64,7 +66,9 @@ def eval_wikitext2(model, tokenizer, max_length=1024, stride=512, verbose=True):
 		input_ids  = encodings['input_ids'][:,begin_loc:end_loc]
 		target_ids = input_ids.clone()
 		target_ids[:,:-trg_len] = -100 #ignore context 
-		#model = model.to('cuda')
+        if (i == 0):
+            for _ in range(20):
+                log_likelihood = model(input_ids, labels=target_ids).loss
 		t1 = time.time()
 		with torch.no_grad():
 			log_likelihood = model(input_ids, labels=target_ids).loss * trg_len
