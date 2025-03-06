@@ -1,7 +1,3 @@
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2024
-#####################################################
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2024
-#####################################################
 import torch
 import sys
 import milo
@@ -18,7 +14,7 @@ class MiLoWithZeros(torch.nn.Module):
         device = W.device
         _linear = torch.nn.Linear(m, n)
         _linear.weight.data = W.half().t()
-        _layer = marlin.Layer3bit_64_256_WithZero(m, n, groupsize)
+        _layer = milo.Layer3bitWithZeros(m, n, groupsize)
         _layer.k = m
         _layer.n = n
         _layer.groupsize = groupsize
@@ -51,8 +47,7 @@ class MiLoWithZeros(torch.nn.Module):
         out = torch.empty(
             x.shape[:-1] + (self.scales.shape[1],), dtype=x.dtype, device=x.device
         )
-        #print("marlin.py,171,x,B1,C,s",x.shape,self.Wq_packed1.shape,out.shape,self.scales.shape)
-        milo.mul_3bit_with_zero(
+        milo.mul_3bit_with_zeros(
             x.to(self.device).view((-1, x.shape[-1])),
             self.Wq_packed1,
             self.Wq_packed2,
@@ -74,28 +69,28 @@ class MiLoWithZeros(torch.nn.Module):
 
 # ONLY WORKS WITH AXIS=1, group_size= 64
 def patch_hqq_to_miloWithZeros(layer, patch_params):
-    hqq_layer = None
-    if type(layer) is HQQLinear:
-        hqq_layer = layer
+    milo_layer = None
+    if type(layer) is MiLoLinear:
+        milo_layer = layer
     if type(layer) is HQQLinearLoRA:
-        hqq_layer = layer.linear_layer
-    if hqq_layer is None:
+        milo_layer = layer.linear_layer
+    if milo_layer is None:
         return layer
 
-    hqq_layer = layer.linear_layer if hasattr(layer, "linear_layer") else layer
+    milo_layer = layer.linear_layer if hasattr(layer, "linear_layer") else layer
     # Check config suppport
     if (
-        (hqq_layer.meta["axis"] == 0)
-        or (hqq_layer.meta["group_size"] != 64)
-        or (hqq_layer.meta["nbits"] != 3)
+        (milo_layer.meta["axis"] == 0)
+        or (milo_layer.meta["group_size"] != 64)
+        or (milo_layer.meta["nbits"] != 3)
     ):
-        print("Skipping marlin conversion for", hqq_layer.name)
+        print("Skipping milo conversion for", milo_layer.name)
         return layer
     
-    z = hqq_layer.meta["zero"]
-    s = hqq_layer.meta["scale"]
+    z = milo_layer.meta["zero"]
+    s = milo_layer.meta["scale"]
     z = - z * s
-    W_r = hqq_layer.unpack(dtype=hqq_layer.compute_dtype)
+    W_r = milo_layer.unpack(dtype=milo_layer.compute_dtype)
     W_r = W_r[:s.shape[0]]
     #W_r = W_r.t()
     
@@ -104,21 +99,21 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     #print(z.shape)    # Shape of the third tensor
 
     W_r = W_r * s + z
-    W_r = W_r.reshape(hqq_layer.meta["shape"])
+    W_r = W_r.reshape(milo_layer.meta["shape"])
     #print("in marlin.py",W_r.shape,s.shape)
-    marlin_3bit_withzero_layer =    MiLoWithZeros(W_r.t(), s.t(), z.t(),bias=hqq_layer.bias)
+    milo_withzero_layer =  MiLoWithZeros(W_r.t(), s.t(), z.t(),bias=milo_layer.bias)
 
-    del hqq_layer.W_q
-    del hqq_layer.meta
-    del hqq_layer.bias
-    del hqq_layer
+    del milo_layer.W_q
+    del milo_layer.meta
+    del milo_layer.bias
+    del milo_layer
     torch.cuda.empty_cache()
 
     if isinstance(layer, HQQLinear):
-        return marlin_3bit_withzero_layer
+        return milo_withzero_layer
 
     if isinstance(layer, HQQLinearLoRA):
-        layer.linear_layer = marlin_3bit_withzero_layer
+        layer.linear_layer = milo_withzero_layer
 
     torch.cuda.empty_cache()
 

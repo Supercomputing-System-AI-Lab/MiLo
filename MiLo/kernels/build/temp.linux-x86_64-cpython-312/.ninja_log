@@ -1,0 +1,4 @@
+# ninja log v5
+4	7547	1741292002776183397	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_kernel.o	1d9449c2564a2bb2
+7549	13865	1741292009093730258	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
+2	204977	1741292200188700285	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda.o	98c64b8f19fe38b9

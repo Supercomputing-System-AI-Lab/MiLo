@@ -1,0 +1,34 @@
+ninja_required_version = 1.3
+cxx = /sw/spack/deltas11-2023-03/apps/linux-rhel8-x86_64/gcc-8.5.0/gcc-11.4.0-yycklku/bin/g++
+nvcc = /sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.4.0-6bzpo2x/bin/nvcc
+
+cflags = -fno-strict-overflow -Wsign-compare -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/include -fPIC -O2 -isystem /scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/include -fPIC -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/TH -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.4.0-6bzpo2x/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/include/python3.12 -c
+post_cflags = -g -O0 -D_GLIBCXX_USE_CXX11_ABI=0 -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=milo_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++17
+cuda_cflags = -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/TH -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/lib/python3.12/site-packages/torch/include/THC -I/sw/spack/deltas11-2023-03/apps/linux-rhel8-zen3/gcc-11.4.0/cuda-12.4.0-6bzpo2x/include -I/scratch/bcjw/zshao3/anaconda3/envs/milo_vllm/include/python3.12 -c
+cuda_post_cflags = -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -g -O0 -lineinfo -arch=sm_80 -Xcompiler -D_GLIBCXX_USE_CXX11_ABI=0 --compiler-options -fPIC -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1011"' -DTORCH_EXTENSION_NAME=milo_cuda -D_GLIBCXX_USE_CXX11_ABI=0 -ccbin /sw/spack/deltas11-2023-03/apps/linux-rhel8-x86_64/gcc-8.5.0/gcc-11.4.0-yycklku/bin/gcc -std=c++17
+cuda_dlink_post_cflags = 
+ldflags = 
+
+rule compile
+  command = $cxx -MMD -MF $out.d $cflags -c $in -o $out $post_cflags
+  depfile = $out.d
+  deps = gcc
+
+rule cuda_compile
+  depfile = $out.d
+  deps = gcc
+  command = $nvcc --generate-dependencies-with-compile --dependency-output $out.d $cuda_cflags -c $in -o $out $cuda_post_cflags
+
+
+
+
+
+build /u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda.o: compile /u/zshao3/MiLo/MiLo/kernels/milo/milo_cuda.cpp
+build /u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_kernel.o: cuda_compile /u/zshao3/MiLo/MiLo/kernels/milo/milo_cuda_kernel.cu
+build /u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o: cuda_compile /u/zshao3/MiLo/MiLo/kernels/milo/milo_cuda_with_zero_kernel.cu
+
+
+
+
+
+

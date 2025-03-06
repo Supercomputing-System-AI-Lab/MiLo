@@ -140,6 +140,8 @@ def prepare_for_inference(model, allow_merge=False, backend="default", verbose=F
     )
     cleanup()
 
+    return backend
+
 
 def get_lowrank_tuple_torch_gpu(tensor, max_rank, eps=None):
     t = tensor.t().float()

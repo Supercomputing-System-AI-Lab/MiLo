@@ -84,7 +84,7 @@ AutoMiLoHFModel.save_quantized(model,
 
 ##enable milo kernel backend
 from MiLo.utils.patching import prepare_for_inference
-prepare_for_inference(model, backend="milo3bitwithzero")
+prepare_for_inference(model, backend="milo")
 
 ```
 
