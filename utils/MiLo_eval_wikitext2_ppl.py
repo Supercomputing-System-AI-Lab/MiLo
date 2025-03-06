@@ -36,7 +36,8 @@ def main():
     model = AutoMiLoHFModel.from_quantized(quant_model_dir,LoRC_weight_path=lorc_dir,
                                             LoRC_dtype = lorc_dtype,
                                             ranks=ranks)
-    tokenizer    = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
+    tokenizer  = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token =tokenizer.eos_token
 
