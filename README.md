@@ -104,4 +104,4 @@ MIT license
 
 ## Acknowledgments
 
-This project is built on top of [HQQ]([https://github.com/rapidsai/cuvs](https://github.com/mobiusml/hqq)), an optimization based quantiation algorithm library, and [Marlin](https://github.com/IST-DASLab/marlin), a efficient fp16xINT4 GeMM CUDA kernel. We thank the HQQ and Marlin team for providing this foundation.
+This project is built on top of [HQQ](https://github.com/mobiusml/hqq), an optimization based quantiation algorithm library, and [Marlin](https://github.com/IST-DASLab/marlin), a efficient fp16xINT4 GeMM CUDA kernel. We thank the HQQ and Marlin team for providing this foundation.
