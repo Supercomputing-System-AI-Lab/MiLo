@@ -70,7 +70,7 @@ class MiLoWithZeros(torch.nn.Module):
 # ONLY WORKS WITH AXIS=1, group_size= 64
 def patch_hqq_to_miloWithZeros(layer, patch_params):
     milo_layer = None
-    if type(layer) is MiLoLinear:
+    if type(layer) is HQQLinear:
         milo_layer = layer
     if type(layer) is HQQLinearLoRA:
         milo_layer = layer.linear_layer
@@ -99,8 +99,12 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     #print(z.shape)    # Shape of the third tensor
 
     W_r = W_r * s + z
-    W_r = W_r.reshape(milo_layer.meta["shape"])
+    n = milo_layer.meta["shape"][0]
+    W_r = W_r.reshape((n,-1))
+    s = s.reshape((n,-1))
+    z = z.reshape((n,-1))
     #print("in marlin.py",W_r.shape,s.shape)
+    #print(W_r.shape)
     milo_withzero_layer =  MiLoWithZeros(W_r.t(), s.t(), z.t(),bias=milo_layer.bias)
 
     del milo_layer.W_q

@@ -47,7 +47,7 @@ def benchmark_quant(A, B1, B2, C, s, z,thread_k, thread_n, sms):
     res = benchmark(lambda: milo.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
     return {
         's': res,
-        'TFLOP': (2 * A.numel() * C.shape[1] + 2 * A.shape[1] * C.shape[1])/ 10 ** 12,
+        'TFLOP': (2 * A.numel() * C.shape[1])/ 10 ** 12,
         'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
     }
 
@@ -103,10 +103,10 @@ for groupsize in [64] :
                 for layer in layers:
                     A, B1, B2, C, B_ref, s, z = get_problem(batch, layer[1], layer[0], groupsize)
                     res_d = benchmark_dense(A, B_ref, C)
-                    if model == "Falcon180B":
-                        res_q = benchmark_quant(A, B1, B2, C, s,z,64, 256, SMS)
-                    else:
+                    if model == 'ideal' or model == 'arctic':
                         res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
+                    else:
+                        res_q = benchmark_quant(A, B1, B2, C, s,z,-1, -1, SMS)
                     tot_q['s'] += res_q['s']
                     tot_q['memory'] += res_q['GB']
                     tot_q['TFLOP'] += res_q['TFLOP']

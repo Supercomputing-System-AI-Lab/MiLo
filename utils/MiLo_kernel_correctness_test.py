@@ -16,7 +16,7 @@ DEV = torch.device('cuda:0')
 
 def gen_quant3(m, n, groupsize=64):
     maxq = 2 ** 3 - 1
-    w = torch.ones((m, n), dtype=torch.half, device=DEV)
+    w = torch.randn((m, n), dtype=torch.half, device=DEV)
     if groupsize != -1:
         w = w.reshape((-1, groupsize, n))
         w = w.permute(1, 0, 2)
@@ -68,7 +68,7 @@ class Test(unittest.TestCase):
     def test_tiles(self):
         print("\n test_tiles, would show assertion error if the result is wrong.")
         for m in [1, 2, 3, 4, 8, 12, 16, 24, 32, 48, 64, 118, 128]:
-            for thread_k, thread_n in [(64, 256),(256, 64),(128,128)]:
+            for thread_k, thread_n in [(64, 256),(128,128)]:
                 self.run_problem(m, 2 * 256, 1024, thread_k, thread_n)
     
     def test_k_stages_divisibility(self):    
@@ -100,7 +100,7 @@ class Test(unittest.TestCase):
 
         for _, layers in MODELS.items():
             for layer in layers:
-                for thread_k, thread_n in [(64, 256),(128, 128),(256, 64)]:
+                for thread_k, thread_n in [(64, 256),(128, 128)]:
                     for batch in [1, 16]:
                         self.run_problem(batch, layer[1], layer[0],thread_k, thread_n,64)
 

@@ -227,7 +227,7 @@ template <
   const int thread_n_blocks, // same for n dimension (output) 
   const int thread_k_blocks, // same for k dimension (reduction)
   const int stages, // number of stages for the async global->shared fetch pipeline
-  const int group_blocks = -1 // number of consecutive 16x16 blocks with a separate quantization scale
+  const int group_blocks = 4 // number of consecutive 16x16 blocks with a separate quantization scale
 >
 __global__ void MiLo(
   const int4* __restrict__ A, // fp16 input matrix of shape mxk 
@@ -340,7 +340,7 @@ __global__ void MiLo(
 
   int s_gl_stride = prob_n / 8;
   constexpr int s_sh_stride = 16 * thread_n_blocks / 8; //32, 16, 8
-  constexpr int s_sh_stage = s_sh_stride;
+  constexpr int s_sh_stage = s_sh_stride * (thread_k_blocks/ group_blocks);
   int s_gl_rd_delta = s_gl_stride * thread_k_blocks / group_blocks;
 
   // Global A read index of current thread.
@@ -358,11 +358,17 @@ __global__ void MiLo(
   int b_sh_wr = threadIdx.x;
   int b_sh_rd = threadIdx.x;
 
-  int s_sh_wr = 8 * (threadIdx.x / 32) + (threadIdx.x % 32);
+  int s_sh_wr = 2 *thread_n_blocks * (threadIdx.x / 32) + (threadIdx.x % 32);
   //int s_iter = thread_k_blocks / group_blocks;
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks + threadIdx.x / 32) + s_sh_stride * slice_col + threadIdx.x % 32;
   int s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
-  
+  int s_sh_rd_delta;
+  if (thread_k_blocks / group_blocks > 1) {
+    s_sh_rd_delta = 16;
+  }
+  else{
+    s_sh_rd_delta = 0;
+  }
   // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
   // required for a certain tilesize or when the batchsize is not a multiple of 16.
   bool a_sh_wr_pred[a_sh_wr_iters];
@@ -465,8 +471,8 @@ __global__ void MiLo(
 
   // Load the next sub-tile from the current location in the shared memory pipe into the current register buffer.
   auto fetch_to_registers = [&] (int k, int pipe) {
-    int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
-    reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd];
+    int4* sh_s_stage = sh_s + s_sh_stage * pipe;
+    reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd_delta * (k % b_sh_wr_iters) + s_sh_rd];
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++)
@@ -796,6 +802,7 @@ __global__ void MiLo(
 }
 
 
+
 // 8 warps are a good choice since every SM has 4 schedulers and having more than 1 warp per schedule allows some more
 // latency hiding. At the same time, we want relatively few warps to have many registers per warp and small tiles.
 const int THREADS = 256;
@@ -901,7 +908,7 @@ int milo_cuda(
     if (false) {}
     CALL_IF(1,  8,  8,  4)
     CALL_IF(2,  8,  8,  4)
-    CALL_IF(1,  4,  16,  4)
+    //CALL_IF(1,  4,  16,  4)
     CALL_IF(1, 16,  4,  4)
     CALL_IF(2, 16,  4,  4)
     CALL_IF(3, 16,  4,  4)

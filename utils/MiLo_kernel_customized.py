@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--batchsize', type=int, required=True, help="Batch Size")
     parser.add_argument('--weight_output_dimension', type=int, required=True, help="weight_output_dimension")
     parser.add_argument('--weight_input_dimension', type=int, default=None, help="weight_intput_dimension")
-    parser.add_argument('--tile_shape', type=str, choices=["64,256", "128,128", "256,64"], default="128,128", help="Set tile shape. Options: '64,256', '128,128', '256,64'")
+    parser.add_argument('--tile_shape', type=str, choices=["64,256", "128,128"], default="128,128", help="Set tile shape. Options: '64,256', '128,128', '256,64'")
 
     args = parser.parse_args()
     print(f"Selected tile shape: {args.tile_shape}")

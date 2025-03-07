@@ -1,19 +1,3 @@
-/*
- * Copyright (C) Marlin.2024 Elias Frantar (elias.frantar@ist.ac.at)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *         http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 
 #ifndef MILO_CUDA_WITH_ZERO_KERNEL_CUH 
 #define MILO_CUDA_WITH_ZERO_KERNEL_CUH
@@ -69,9 +53,6 @@ __device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr, bool
   );
 }
 
-// Asynchronous global->shared copy with a cache hint indicating that the values may be evicted immediately; used for
-// quantized weights B, which are only accessed precisely once and should thus not pollute the L2 cache which we need
-// for inputs A and outputs C. 
 __device__ inline void cp_async4_stream(void* smem_ptr, const void* glob_ptr) {
   const int BYTES = 16;
   uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
@@ -84,9 +65,6 @@ __device__ inline void cp_async4_stream(void* smem_ptr, const void* glob_ptr) {
   );
 }
 
-// Asynchronous global->shared copy with a cache hint indicating that the values may be evicted immediately; used for
-// quantized weights B, which are only accessed precisely once and should thus not pollute the L2 cache which we need
-// for inputs A and outputs C. 
 __device__ inline void cp_async_stream2(void* smem_ptr, const void* glob_ptr) {
   const int BYTES = 8;
   uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
@@ -338,7 +316,7 @@ __global__ void MiLoWithZeros(
 
   int s_gl_stride = prob_n / 8;
   constexpr int s_sh_stride = 16 * thread_n_blocks / 8; //32, 16, 8
-  constexpr int s_sh_stage = s_sh_stride;
+  constexpr int s_sh_stage = s_sh_stride * (thread_k_blocks/ group_blocks);
   int s_gl_rd_delta = s_gl_stride * thread_k_blocks / group_blocks;
 
   // Global A read index of current thread.
@@ -356,11 +334,17 @@ __global__ void MiLoWithZeros(
   int b_sh_wr = threadIdx.x;
   int b_sh_rd = threadIdx.x;
 
-  int s_sh_wr = 8 * (threadIdx.x / 32) + (threadIdx.x % 32);
+  int s_sh_wr = 2 *thread_n_blocks * (threadIdx.x / 32) + (threadIdx.x % 32);
   //int s_iter = thread_k_blocks / group_blocks;
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks + threadIdx.x / 32) + s_sh_stride * slice_col + threadIdx.x % 32;
   int s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
-  
+  int s_sh_rd_delta;
+  if (thread_k_blocks / group_blocks > 1) {
+    s_sh_rd_delta = 16;
+  }
+  else{
+    s_sh_rd_delta = 0;
+  } 
   // Precompute which thread should not read memory in which iterations; this is needed if there are more threads than
   // required for a certain tilesize or when the batchsize is not a multiple of 16.
   bool a_sh_wr_pred[a_sh_wr_iters];
@@ -428,7 +412,6 @@ __global__ void MiLoWithZeros(
   // Asynchronously fetch the next A, B and s tile from global to the next shared memory pipeline location.
   auto fetch_to_shared = [&] (int pipe, int a_off, bool pred = true) {
     if (pred) {
-      //if(blockIdx.x == 0 && threadIdx.x == 0) printf("here in share! %d \n", pipe);
       int4* sh_a_stage = sh_a + a_sh_stage * pipe;
       #pragma unroll
       for (int i = 0; i < a_sh_wr_iters; i++) {
@@ -467,9 +450,9 @@ __global__ void MiLoWithZeros(
 
   // Load the next sub-tile from the current location in the shared memory pipe into the current register buffer.
   auto fetch_to_registers = [&] (int k, int pipe) {
-    int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
+    int4* sh_s_stage = sh_s + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd];
-    int4* sh_z_stage = sh_z + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
+    int4* sh_z_stage = sh_z + s_sh_stage * pipe;
     reinterpret_cast<int4*>(&frag_z[k % 2])[0] = sh_z_stage[s_sh_rd];
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
@@ -645,16 +628,11 @@ __global__ void MiLoWithZeros(
     // We first reorder in shared memory to guarantee the most efficient final global write patterns
     auto write = [&] (int idx, float c0, float c1, FragS& s) {
       half2 res = __halves2half2(__float2half(c0), __float2half(c1));
-      if (group_blocks == -1) // for per-column quantization we finally apply the scale here
-        {
-          res = __hmul2(res, s[0]);
-        }
       ((half2*) sh)[idx] = res;
     };
     if (threadIdx.x / 32 < thread_n_blocks / 4) {
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
-        //printf("frag_c0 : %f, frag_c1 : %f, s : %x  \n", frag_c[i][0][0][0], frag_c[i][0][0][1], frag_s[0][0]);
         #pragma unroll
         for (int j = 0; j < 4; j++) {
           int wr = c_sh_wr + 8 * j;
@@ -866,7 +844,7 @@ int milo_cuda_with_zeros(
     if (false) {}
     CALL_IF(1,  8,  8,  4)
     CALL_IF(2,  8,  8,  4)
-    CALL_IF(1,  4,  16,  4)
+    //CALL_IF(1,  4,  16,  4)
     CALL_IF(1, 16,  4,  4)
     CALL_IF(2, 16,  4,  4)
     CALL_IF(3, 16,  4,  4)

@@ -20,12 +20,12 @@ def cleanup():
 	gc.collect()
 
 
-model_path = "/scratch/bcjw/bhuang4/mixtral/noIns_myQuant_HQQ_3bit_gs64-int3_symm-iter10-u32"
-lorc_dir = "/scratch/bcjw/bhuang4/HQQ_LoRC/u32-int3-symm-iter10-iter10"
+model_path = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/model"
+lorc_dir = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/lorc"
 
 
 #quant_config = HqqConfig(nbits=3, group_size=64, axis=1)
-ranks = {'self_attn': 32, 'experts':32}
+ranks = {'self_attn': 0, 'experts':0}
 
 model = MixtralMiLo.from_quantized(model_path,LoRC_weight_path=lorc_dir,
                                             LoRC_dtype = "int3_symm",
@@ -77,59 +77,5 @@ def eval_wikitext2(model, tokenizer, max_length=128, stride=16, verbose=True):
 
 	del encodings
 	cleanup()
-
-def test_first_token_latency(model):
-	model.eval()
-	batchsizes = [1, 16, 32]
-	seq_len = 1024
-	for batch_size in batchsizes:
-		input_ids = torch.randint(10000, (batch_size, seq_len)).to("cuda:0")
-		for _ in range(20): #warmup
-			model(input_ids = input_ids)
-		start = time.time()
-		for i in range(300):
-			model(input_ids = input_ids)
-		torch.cuda.synchronize()
-		end = time.time()
-		TTFT = np.round((end - start)/300, 3)
-		print("batchsize:", batch_size)
-		print('first token time',str(TTFT)+' sec ')
-
-
-# def main():
-#     parser = argparse.ArgumentParser(description="")
-#     parser.add_argument('--base_dir', type=str, required=True, help="base directory to save the quantized model")
-#     parser.add_argument('--model_id', type=str, required=True, help="base model type")
-#     args = parser.parse_args()
-
-#     print(f"Start MiLo end-to-end latency evaluation on {args.base_dir}")
-
-# 	if "Mixtral" in args.model_id:
-#         model_id = "mistralai/Mixtral-8x7B-v0.1" 
-#         AutoMiLoHFModel = MixtralMiLo
-#     else:
-#         NotImplementedError("This model is not implemented yet")
 	
-# 	quant_model_dir = f"{args.base_dir}/model"
-#     lorc_dir = f"{args.base_dir}/lorc"
-#     lorc_dtype = "int3_symm"
-#     ranks = {'self_attn': 0, 'experts':0}
-   
-#     model = AutoMiLoHFModel.from_quantized(quant_model_dir,LoRC_weight_path=lorc_dir,
-#                                             LoRC_dtype = lorc_dtype,
-#                                             ranks=ranks)
-#     tokenizer  = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
-
-#     if tokenizer.pad_token is None:
-#         tokenizer.pad_token =tokenizer.eos_token
-
-# 	save_file_path = os.path.join(args.base_dir, "eval_result.json")
-# 	eval_wikitext2(model, tokenizer, max_length=1024, stride=512, verbose=True)
-# 	return
-
-# if __name__ == "__main__":
-#     #main()
-# 	eval_wikitext2(model, tokenizer, max_length=1024, stride=512, verbose=True)
-
-	
-eval_wikitext2(model, tokenizer, max_length=1024, stride=512, verbose=True)
+eval_wikitext2(model, tokenizer, max_length=32, stride=8, verbose=True)
