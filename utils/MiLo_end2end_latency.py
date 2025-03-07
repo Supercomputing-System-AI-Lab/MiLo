@@ -1,10 +1,11 @@
-# import argparse
-# import json
+import argparse
+import json
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from MiLo.core.quantize import *
 from MiLo.models.hf.mixtral import MixtralMiLo
+from MiLo.utils.patching import prepare_for_inference
 import torch, time
 import numpy as np
 from tqdm import tqdm
@@ -16,10 +17,6 @@ def cleanup():
 
 ranks = {'self_attn': 0, 'experts':0}
 
-
-from MiLo.utils.patching import prepare_for_inference
-backend = prepare_for_inference(model, backend="milo")
-print(backend)
 
 
 def test_first_token_latency(model):
@@ -54,10 +51,12 @@ def main():
     model = MixtralMiLo.from_quantized(quant_model_dir,LoRC_weight_path=lorc_dir,
                                             LoRC_dtype = lorc_dtype,
                                             ranks=ranks)
+
     from MiLo.utils.patching import prepare_for_inference
     backend = prepare_for_inference(model, backend="milo")
     print(backend)
     test_first_token_latency(model)
+    cleanup()
 
 if __name__ == "__main__":
     main()
