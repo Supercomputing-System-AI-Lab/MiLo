@@ -14,10 +14,6 @@ def cleanup():
 	torch.cuda.empty_cache()
 	gc.collect()
 
-
-# model_path = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/model"
-# lorc_dir = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/lorc"
-
 ranks = {'self_attn': 0, 'experts':0}
 
 model = MixtralMiLo.from_quantized(model_path,LoRC_weight_path=lorc_dir,

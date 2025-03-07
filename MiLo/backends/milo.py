@@ -7,7 +7,7 @@ from ..core.peft import HQQLinearLoRA
 
 class MiLoWithZeros(torch.nn.Module):
     def __init__(
-        self, W: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor,bias= None, groupsize=64):
+        self, W: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor,u, v, bias= None, groupsize=64):
         super().__init__()
 
         m, n = W.shape
@@ -39,6 +39,8 @@ class MiLoWithZeros(torch.nn.Module):
         self.axis = 1
         self.device = device
         self.compute_dtype = torch.float16
+        self.U = u
+        self.V = v
         del _linear, _layer
         torch.cuda.empty_cache()
 
@@ -62,7 +64,8 @@ class MiLoWithZeros(torch.nn.Module):
     def forward(self, x):
         #print("here in 3bit forward! \n")
         out = self.matmul(x)
-        #out = out + self.u[:x.shape[0]] * self.v 
+        if self.U != None and self.V != None:
+            out = out + (x @ self.V) @ self.U
         if self.bias is not None:
             out += self.bias
         return out
@@ -92,8 +95,13 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     z = - z * s
     W_r = milo_layer.unpack(dtype=milo_layer.compute_dtype)
     W_r = W_r[:s.shape[0]]
+    if milo_layer.U != None and milo_layer.V != None:
+        u = milo_layer.U.t() 
+        v = milo_layer.V.t()
+    else:
+        u = None
+        v = None
     #W_r = W_r.t()
-    
     #print(W_r.shape)  # Shape of the first tensor
     #print(s.shape)    # Shape of the second tensor
     #print(z.shape)    # Shape of the third tensor
@@ -103,9 +111,7 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     W_r = W_r.reshape((n,-1))
     s = s.reshape((n,-1))
     z = z.reshape((n,-1))
-    #print("in marlin.py",W_r.shape,s.shape)
-    #print(W_r.shape)
-    milo_withzero_layer =  MiLoWithZeros(W_r.t(), s.t(), z.t(),bias=milo_layer.bias)
+    milo_withzero_layer =  MiLoWithZeros(W_r.t(), s.t(), z.t(),u,v,bias=milo_layer.bias)
 
     del milo_layer.W_q
     del milo_layer.meta
