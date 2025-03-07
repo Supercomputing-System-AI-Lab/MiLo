@@ -37,6 +37,7 @@ int milo_cuda(
   int sms = -1,
   int max_par = 16
 );
+
 int milo_cuda_with_zeros(
   const void* A,
   const void* B1,

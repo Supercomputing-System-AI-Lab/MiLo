@@ -131,8 +131,7 @@ class Layer3bitWithZeros(nn.Module):
         w = w.reshape((self.groupsize, -1)) # (self.group_size, k/group_size * n)
         s = s.reshape((1, -1)) 
         z = z.reshape((1, -1)) 
-        w = torch.round(w / s).int()
-        w += (maxq + 1) // 2
+        w = torch.round((w - z) / s).int()
         w = torch.clamp(w, 0, maxq)
         w = w.reshape((self.groupsize, -1, self.n)) # (group_size, k/group_size, n)
         w = w.permute(1, 0, 2)

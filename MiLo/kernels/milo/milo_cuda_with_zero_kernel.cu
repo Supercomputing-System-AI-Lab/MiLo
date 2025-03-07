@@ -15,7 +15,7 @@
  */
 
 
-#ifndef MILO_CUDA_WITH_ZERO_KERNEL_CUH
+#ifndef MILO_CUDA_WITH_ZERO_KERNEL_CUH 
 #define MILO_CUDA_WITH_ZERO_KERNEL_CUH
 
 
@@ -54,8 +54,6 @@ using FragB = Vec<half2, 2>;
 using FragC = Vec<float, 4>;
 using FragS = Vec<half2, 1>; // quantization scales
 using FragZ = Vec<half2, 1>; 
-using FragB_8 = Vec<FragB, 8>;
-using FragB_2 = Vec<FragB, 2>;
 
 // Predicated asynchronous global->shared copy; used for inputs A where we apply predication to handle batchsizes that
 // are not multiples of 16.
@@ -228,7 +226,7 @@ template <
   const int stages, // number of stages for the async global->shared fetch pipeline
   const int group_blocks = -1 // number of consecutive 16x16 blocks with a separate quantization scale
 >
-__global__ void MiLo(
+__global__ void MiLoWithZeros(
   const int4* __restrict__ A, // fp16 input matrix of shape mxk 
   const I2* __restrict__ B1, // 3bit quantized weight matrix of shape kxn 
   const int* __restrict__ B2,
@@ -411,6 +409,7 @@ __global__ void MiLo(
   I2* sh_b1 = reinterpret_cast<I2*>(sh_a + stages * a_sh_stage);
   int* sh_b2 = reinterpret_cast<int*>(sh_b1 + stages * b_sh_stage);
   int4* sh_s = sh_a + stages * a_sh_stage + stages * b_sh_stage;
+  int4* sh_z = sh_s + stages * s_sh_stage;
 
   // Register storage for double buffer of shared memory reads. 
   FragA frag_a[2][thread_m_blocks];
@@ -449,8 +448,10 @@ __global__ void MiLo(
         B2_ptr[i] += b_gl_rd_delta_o;
       }
       int4* sh_s_stage = sh_s + s_sh_stage * pipe;
-       cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], (threadIdx.x / 32 < thread_k_blocks / group_blocks) && (threadIdx.x % 32< s_sh_stride));
-       s_gl_rd += s_gl_rd_delta;
+      cp_async4_pred(&sh_s_stage[s_sh_wr], &s[s_gl_rd], (threadIdx.x / 32 < thread_k_blocks / group_blocks) && (threadIdx.x % 32< s_sh_stride));
+      int4* sh_z_stage = sh_z + s_sh_stage * pipe;
+      cp_async4_pred(&sh_z_stage[s_sh_wr], &z[s_gl_rd], (threadIdx.x / 32 < thread_k_blocks / group_blocks) && (threadIdx.x % 32< s_sh_stride));
+      s_gl_rd += s_gl_rd_delta;
     }
     // Insert a fence even when we are winding down the pipeline to ensure that waiting is also correct at this point.
     cp_async_fence();
@@ -468,6 +469,8 @@ __global__ void MiLo(
   auto fetch_to_registers = [&] (int k, int pipe) {
     int4* sh_s_stage = sh_s + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
     reinterpret_cast<int4*>(&frag_s[k % 2])[0] = sh_s_stage[s_sh_rd];
+    int4* sh_z_stage = sh_z + s_sh_stage * ((group_blocks / thread_k_blocks) * (pipe / (group_blocks / thread_k_blocks)));
+    reinterpret_cast<int4*>(&frag_z[k % 2])[0] = sh_z_stage[s_sh_rd];
     int4* sh_a_stage = sh_a + a_sh_stage * pipe;
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++)
@@ -541,8 +544,6 @@ __global__ void MiLo(
                   reinterpret_cast<FragC*>(frag_c)[4 * 2 * m_block + j][k] += c_rd[k] + c_wr[k];
               }
             sh[red_sh_wr] = reinterpret_cast<int4*>(&frag_c)[4 * 2 * m_block + j];
-              //sh[red_sh_wr] = reinterpret_cast<int4*>(&(frag_c[m_block][j/2][j%2]))[0]; 
-
             }
           }
           __syncthreads();
@@ -657,9 +658,6 @@ __global__ void MiLo(
         #pragma unroll
         for (int j = 0; j < 4; j++) {
           int wr = c_sh_wr + 8 * j;
-          //if (frag_c[i][j][0][0] != 384.0 | frag_c[i][j][0][2] != 384.0 | frag_c[i][j][1][2] != 384.0 | frag_c[i][j][1][0] != 384.0)
-          //if (blockIdx.x == 0 && threadIdx.x == 0)
-            //printf("block: %d, thread: %d, i : %d, j : %d, c0: %f, c1: %f, s: %x \n", blockIdx.x, threadIdx.x,i, j, frag_c[i][j][0][0], frag_c[i][j][0][1], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 0 + 0, frag_c[i][j][0][0], frag_c[i][j][0][1], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 8 + 0, frag_c[i][j][0][2], frag_c[i][j][0][3], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 0 + 4, frag_c[i][j][1][0], frag_c[i][j][1][1], frag_s[j / 2][2 * (j % 2) + 1]);
@@ -722,11 +720,7 @@ __global__ void MiLo(
       cp_async_wait<0>();
       bool last = slice_idx == slice_count - 1;
       thread_block_reduce();
-
-
-
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
-        //printf("thread %d, block %d, use the global_reduce \n",threadIdx.x, blockIdx.x);
         barrier_acquire(&locks[slice_col], slice_idx);
         global_reduce(slice_idx == 0, last);
         barrier_release(&locks[slice_col], last);
@@ -777,12 +771,12 @@ const int SHARED_MEM = 96 * 1024; // max shared memory on compute capability 8.6
     group_blocks == GROUP_BLOCKS \
   ) { \
     cudaFuncSetAttribute( \
-      MiLo<THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS>, \
+      MiLoWithZeros<THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS>, \
       cudaFuncAttributeMaxDynamicSharedMemorySize, \
       SHARED_MEM \
     ); \
-    MiLo< \
-      THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS \
+    MiLoWithZeros\
+    <THREADS, THREAD_M_BLOCKS, THREAD_N_BLOCKS, THREAD_K_BLOCKS, STAGES, GROUP_BLOCKS \
     ><<<blocks, THREADS, SHARED_MEM, stream>>>( \
       A_ptr, B1_ptr, B2_ptr, C_ptr, s_ptr, z_ptr, \
       prob_m, prob_n, prob_k, \

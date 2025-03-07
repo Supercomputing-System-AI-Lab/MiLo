@@ -22,7 +22,7 @@ def cleanup():
 	gc.collect()
 
 
-model_path = "/scratch/bcjw/zshao3/huggingface/models--mistralai--Mixtral-8x7B-v0.1-w3-gs64"
+model_path = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/model"
 lorc_dir = "/scratch/bcjw/zshao3/huggingface/mixtral_milo/lorc"
 
 

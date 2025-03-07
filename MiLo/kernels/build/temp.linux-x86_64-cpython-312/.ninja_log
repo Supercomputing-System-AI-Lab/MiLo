@@ -1,4 +1,7 @@
 # ninja log v5
-4	7547	1741292002776183397	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_kernel.o	1d9449c2564a2bb2
-7549	13865	1741292009093730258	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
-2	204977	1741292200188700285	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda.o	98c64b8f19fe38b9
+3	6199	1741322147646202290	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_kernel.o	1d9449c2564a2bb2
+3	6476	1741322165421593522	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
+2	53194	1741322212121869165	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda.o	98c64b8f19fe38b9
+12917	19232	1741322812864863715	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
+16600	22761	1741323815123611048	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
+15904	23025	1741326811643235232	/u/zshao3/MiLo/MiLo/kernels/build/temp.linux-x86_64-cpython-312/milo/milo_cuda_with_zero_kernel.o	1ba5656a11037748
