@@ -26,7 +26,7 @@ cd marlin
 pip install .
 
 echo "=====get 4-bit quant model for Marlin ====="
-python utils/Marlin_quant_main.py --base_dir ${marlin_save_dir} --model_id Mixtral --dense_rank 3 --kurtosis_flag s1
+python utils/Marlin_quant_main.py --base_dir ${marlin_save_dir} --model_id mistralai/Mixtral-8x7B-v0.1 --iteration 0 --dense_rank 0 --sparse_rank 0
 
 echo "===== Marlin end-to-end Latency  ====="
 python utils/Marlin_end2end_latency.py --base_dir ${marlin_save_dir}
