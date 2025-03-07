@@ -1,5 +1,4 @@
-# import argparse
-# import json
+import argparse
 import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -8,19 +7,11 @@ from MiLo.models.hf.mixtral import MixtralMiLo
 import torch, time
 import numpy as np
 from tqdm import tqdm
-
 import gc
+
 def cleanup():
     torch.cuda.empty_cache()
     gc.collect()
-
-ranks = {'self_attn': 0, 'experts':0}
-
-
-from MiLo.utils.patching import prepare_for_inference
-backend = prepare_for_inference(model, backend="milo")
-print(backend)
-
 
 def test_first_token_latency(model):
     model.eval()
@@ -35,10 +26,9 @@ def test_first_token_latency(model):
             model(input_ids = input_ids)
         torch.cuda.synchronize()
         end = time.time()
-        latency = np.round((end - start)/400, 3)
+        TTFT = np.round((end - start)/400, 3)
         print("batchsize:", batch_size)
-        print('latency',str(latency)+' sec ')
-
+        print('latency',str(TTFT)+' sec ')
 
 def main():
     parser = argparse.ArgumentParser(description="")
@@ -46,6 +36,7 @@ def main():
     args = parser.parse_args()
 
     print(f"Start MiLo end-to-end latency evaluation on {args.base_dir}")
+    
     quant_model_dir = f"{args.base_dir}/model"
     lorc_dir = f"{args.base_dir}/lorc"
     lorc_dtype = "int3_symm"
