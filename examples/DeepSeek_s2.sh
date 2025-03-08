@@ -14,4 +14,4 @@ python utils/MiLo_eval_zeroshot.py --base_dir ${save_dir} --model_id DeepSeek
 
 #optional running fewshots, since MMLU and TriQA take long time
 # echo "===== Zero-Shot eval ====="
-# python MiLo_eval_fewshot.py --base_dr ${save_dir} --model Mixtral
+# python MiLo_eval_fewshot.py --base_dr ${save_dir} --model DeepSeek
