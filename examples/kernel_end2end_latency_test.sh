@@ -3,6 +3,10 @@ milo_save_dir="$1"
 marlin_save_dir="$2"
 
 echo "===== MiLo kernel Mixtral end-to-end Latency  ====="
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <milo_save_dir> <marlin_save_dir>"
+    exit 1
+fi
 echo "=====expercted output=====
 Marlin: batchsize: 1
 latency 0.123 sec 
