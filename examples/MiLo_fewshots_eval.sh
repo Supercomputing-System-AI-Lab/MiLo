@@ -9,6 +9,6 @@ model="$2"     #DeepSeek or Mixtral
 
 echo "This script contain the few-shots evaluation with MMLU and TriQA"
 echo "Estimated running time: 10 hr"
-python MiLo_eval_fewshot.py --base_dr ${save_dir} --model ${model}
+python utils/MiLo_eval_fewshots.py --base_dr ${save_dir} --model ${model}
 
 
