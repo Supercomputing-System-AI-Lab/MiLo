@@ -43,7 +43,7 @@ conda install -y -c nvidia \
     libcusparse=12.3.0.142 \
     libnpp=12.2.5.2 \
     nsight-compute=2024.1.0.13
-
+pip3 install torch torchvision torchaudio
 pip install -r requirements.txt
 
 
