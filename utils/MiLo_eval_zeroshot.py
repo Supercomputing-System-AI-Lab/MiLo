@@ -18,7 +18,7 @@ from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
 
 LM_EVAL_TASK_KWARGS_DICT = {
 
-    # "hellaswag": {"task": "hellaswag", "num_fewshot": 0, "batch_size": 128, "metric": "acc_norm"},
+    "hellaswag": {"task": "hellaswag", "num_fewshot": 0, "batch_size": 128, "metric": "acc_norm"},
     "lambada_openai": {"task": "lambada_openai", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
     "piqa": {"task": "piqa", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
 }
