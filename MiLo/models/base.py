@@ -409,7 +409,7 @@ class BaseHQQModel:
             if isinstance(module, HQQLinear):
                 UV_quantized = module.pop_UV_quantized()
                 if UV_quantized is not None:
-                    print(f"{name}'s UV saved, using type {lorc_dtype}")
+                    # print(f"{name}'s UV saved, using type {lorc_dtype}")
                     if lorc_dtype == 'int3_symm':
                         (U_h_scale, U_h_q), (V_h_scale, V_h_q) = UV_quantized
                     else:
