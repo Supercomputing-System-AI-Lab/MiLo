@@ -487,7 +487,7 @@ class BaseMiLoModel:
 
     # Main function to load an HQQ quantized model from either HF hub or locally
     @classmethod
-    def from_quantized(
+    def from_compressed(
         cls,
         save_dir_or_hub,
         compute_dtype: torch.dtype = float16,

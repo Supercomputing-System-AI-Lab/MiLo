@@ -49,11 +49,12 @@ def main():
     AutoMiLoHFModel.compress_model(model, 
                                    compress_config=compress_config, 
                                    device=device)
+    
     AutoMiLoHFModel.save_compressed(model, quant_model_dir)
 
 
     del model
-    model = AutoMiLoHFModel.from_quantized(quant_model_dir)
+    model = AutoMiLoHFModel.from_compressed(quant_model_dir)
     tokenizer  = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
 
     if tokenizer.pad_token is None:
