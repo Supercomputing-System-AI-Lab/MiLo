@@ -359,10 +359,6 @@ class BaseMiLoModel:
                     compress_config,
                     compute_dtype=compute_dtype,
                     device=current_device,
-                    # lorc_path = lorc_path,
-                    # iters = (iters if ((not iter_expert_only) or ('mlp.experts' in linear_layer.name)) else 0),
-                    # rank = next((value for key, value in ranks.items() if key in linear_layer.name), None),
-                    # lorc_dtype=lorc_dtype
                 )
             else:
                 out_module = linear_layer.to(device=current_device, dtype=compute_dtype)

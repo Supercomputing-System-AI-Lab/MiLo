@@ -369,10 +369,6 @@ class MiLoLinear(nn.Module):
         compute_dtype: torch.dtype = float16,
         device: str = "cuda",
         initialize: bool = True,
-        # lorc_path = None,
-        # iters: int = 0,
-        # rank: int = 0,
-        # lorc_dtype = 'int8'
     ):
         super().__init__()
         self.ready = False
@@ -420,7 +416,7 @@ class MiLoLinear(nn.Module):
 
     def initialize(self):
         if self.linear_layer is not None:
-            self.quantize(self.linear_layer.weight.data, **self.compress_config)
+            self.compress(self.linear_layer.weight.data, **self.compress_config)
             self.bias = (
                 None
                 if (self.linear_layer.bias is None)
@@ -707,7 +703,7 @@ class MiLoLinear(nn.Module):
 
     
 
-    def quantize(
+    def compress(
         self,
         W: Tensor,
         weight_quant_params: dict,
@@ -796,14 +792,14 @@ class MiLoLinear(nn.Module):
         self.ready = True
         if self.UV_quantized is not None:
             self.U,self.V = compensator_dequantize(self.UV_quantized, self.meta["shape"], rank, compensator_params["compensator_quant_gs"], compensator_dtype)
-        if  "layers.0.self_attn.q_proj" in self.name:
-            tosave = {"UV_quantized": self.UV_quantized,
-                    "U":self.U,
-                    "V":self.V,
-                    "W_unquant":W_unquant,
-            }
-            torch.save(tosave,"layer2_downproj.pt")
-            tosave.len()
+        # if  "layers.0.self_attn.q_proj" in self.name:
+        #     tosave = {"UV_quantized": self.UV_quantized,
+        #             "U":self.U,
+        #             "V":self.V,
+        #             "W_unquant":W_unquant,
+        #     }
+        #     torch.save(tosave,"layer2_downproj.pt")
+        #     tosave.len()
 
     def unpack(self, reshape=False, dtype=None):
         if self.ready is False:
@@ -958,10 +954,12 @@ def milo_base_compress_config(
     }
 
     return {
+        # quantization configs
         "weight_quant_params": weight_quant_params,
         "scale_quant_params": scale_quant_params,
         "zero_quant_params": zero_quant_params,
         "offload_meta": offload_meta,
+        # compensator configs
         "compensator_params": compensator_params,
     }
 
