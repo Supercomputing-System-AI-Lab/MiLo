@@ -794,11 +794,13 @@ class MiLoLinear(nn.Module):
             self.U,self.V = compensator_dequantize(self.UV_quantized, self.meta["shape"], rank, compensator_params["compensator_quant_gs"], compensator_dtype)
         # if  "layers.0.self_attn.q_proj" in self.name:
         #     tosave = {"UV_quantized": self.UV_quantized,
+        #             "U_orig":U,
+        #             "V_orig":V,
         #             "U":self.U,
         #             "V":self.V,
         #             "W_unquant":W_unquant,
         #     }
-        #     torch.save(tosave,"layer2_downproj.pt")
+        #     torch.save(tosave,"layers.0.self_attn.q_proj.pt")
         #     tosave.len()
 
     def unpack(self, reshape=False, dtype=None):

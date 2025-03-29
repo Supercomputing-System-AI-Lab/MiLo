@@ -1,30 +1,20 @@
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2023
-#####################################################
 import os
 import torch
-from torch import nn
-from torch import float16
+from torch import nn,float16,uint8, int32, Tensor
 from os.path import join as pjoin
 from typing import Callable
 from tqdm import tqdm
 from abc import abstractmethod
 from functools import partial
 from typing import Union
-
 from huggingface_hub import snapshot_download
 from ..core.utils import cleanup
 from ..core.quantize import MiLoLinear
-
-from safetensors import safe_open
-from safetensors.torch import save_file
-import re
-from torch import uint8, int32, Tensor
-import pickle
 from ..core.compensator import rank_generate,load_compensators
-from ..core.bitpack import BitPack
 import json
 
-# _MiLo_BACKEND_CLASSES = [HQQLinearTorchWeightOnlynt4]
+
+
 
 _MiLo_BACKEND_CLASSES =[]
 try:
@@ -278,7 +268,8 @@ class BaseMiLoModel:
                                                                        compress_config["compensator_params"]["sparse_rank"],
                                                                        compress_config["compensator_params"]["dense_rank"],
                                                                        compress_config["compensator_params"]["rank_strategy"])
-
+        with open("ranks.json", "w", encoding="utf-8") as f:
+            json.dump(compress_config["compensator_params"]["ranks"], f, ensure_ascii=False, indent=4)
         # Use the same quantization config for all linear layers. Use None to skip quantizing a specfic layer.
         if True in [(key in model.linear_tags) for key in compress_config.keys()]:
             # If the user doesn't specify a key from get_linear_tags, the layer is not quantized via (key, None)
@@ -493,13 +484,6 @@ class BaseMiLoModel:
         compute_dtype: torch.dtype = float16,
         device="cuda",
         cache_dir: Union[str, None] = "",
-
-        # LoRC_dtype  = None,
-        # LoRC_weight_path = None,
-        # low_rank_only = False,
-        # lorc_tags = None,
-        # lorc_save_dir = None,
-        # ranks = None,
         **kwargs,
     ):
         # Get directory path
@@ -573,6 +557,7 @@ class BaseMiLoModel:
 
         with open(f"{save_dir}/ranks.json", "r") as f:
            ranks = json.load(f)
+           
         load_compensators(model,all_compensators,ranks)
         
 

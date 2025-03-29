@@ -84,4 +84,4 @@ class BitPack:
         tmp[9 * _step : 10 * _step] = W_q & 0b00000000000000000000000000000111
 
         return tmp
-
+    

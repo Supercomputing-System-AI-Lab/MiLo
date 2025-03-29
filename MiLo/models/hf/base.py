@@ -38,5 +38,5 @@ class BaseMiLoHFModel(BaseMiLoModel):
 
 
 # Auto class used for HF models if no architecture was manually setup
-class AutoHQQHFModel(BaseMiLoHFModel, BasePatch):
+class AutoMiLoHFModel(BaseMiLoHFModel, BasePatch):
     pass

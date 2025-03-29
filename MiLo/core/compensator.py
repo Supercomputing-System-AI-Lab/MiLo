@@ -1,8 +1,8 @@
-import torch
-from .bitpack import BitPack
 import json
 from ..core.quantize import MiLoLinear
 from .utils import compensator_dequantize
+from pathlib import Path
+
 MIXTRAL_LAYERS = {
     "dense": ["self_attn"],
     "sparse": ["experts"],
@@ -31,7 +31,9 @@ def rank_generate(model_id, sparse_rank,dense_rank,strategy):
         ranks = {
             **{name: dense_rank for name in model_layer_info["dense"]},
         }
-        with open("DeepSeek_expt_freq.json", "r") as f:
+        script_dir = Path(__file__).resolve().parent
+        expt_freq_path = script_dir / "model_statistics" / "DeepSeek_expt_freq.json"
+        with open(expt_freq_path, "r") as f:
             data = json.load(f)
         for layer_index in range(27):
             freq = data[layer_index]
@@ -41,15 +43,21 @@ def rank_generate(model_id, sparse_rank,dense_rank,strategy):
                 ranks[f'layers.{layer_index + 1}.mlp.experts.{expert_index}.'] = rank
 
     elif strategy == "Kurtosis" and model_id == "mistralai/Mixtral-8x7B-v0.1":
+        ranks = {
+            **{name: dense_rank for name in model_layer_info["dense"]}
+        }
         if sparse_rank == 16:
             k = 2
         elif sparse_rank == 32:
             k = 3
         else:
             raise NotImplementedError("Currently Mixtral Kurtosis strategy only support the avg rank of 16 and 32")
-        with open("Mixtral_kurtosis_values.json", "r") as f:
+        script_dir = Path(__file__).resolve().parent
+        kurtosis_path = script_dir / "model_statistics" / "Mixtral_kurtosis_values.json"
+        with open(kurtosis_path, "r") as f:
             data = json.load(f)
         for name, kurtosis in data.items():
+            kurtosis = round(float(kurtosis))
             if "self_attn" in name:
                 continue
             else:
@@ -60,10 +68,10 @@ def rank_generate(model_id, sparse_rank,dense_rank,strategy):
                 else:
                     rank = 2 ** (kurtosis+k)
             text = name.replace('.weight', '').strip()
+            
             ranks[text] = rank
     else:
         raise NotImplementedError
-    print(ranks)
     return ranks
 
 

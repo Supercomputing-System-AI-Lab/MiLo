@@ -1,20 +1,13 @@
-
-import argparse
+import time
 import json
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../evaluation')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../evaluation/lm_eval')))
-from transformers import AutoTokenizer
 from evaluation.lm_eval import evaluator
 from evaluation.lm_eval.models.huggingface import HFLM
 from evaluation.lm_eval.tasks import initialize_tasks
-from MiLo.core.quantize import *
-from transformers import AutoTokenizer
-from MiLo.core.quantize import *
-from MiLo.models.hf.mixtral import MixtralMiLo
-from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
 
 LM_EVAL_TASK_KWARGS_DICT = {
 
@@ -23,37 +16,10 @@ LM_EVAL_TASK_KWARGS_DICT = {
     "piqa": {"task": "piqa", "num_fewshot": 0, "batch_size": 128, "metric": "acc"},
 }
 
-def main():
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument('--base_dir', type=str, required=True, help="base directory to save the quantized model")
-    parser.add_argument('--model_id', type=str, required=True, help="base model type")
-    args = parser.parse_args()
-
-    print(f"Start zero-shot evaluation on {args.base_dir}")
-    
-    if "Mixtral" in args.model_id:
-        model_id = "mistralai/Mixtral-8x7B-v0.1" 
-        AutoMiLoHFModel = MixtralMiLo
-    elif "DeepSeek" in args.model_id:
-        model_id = "deepseek-ai/deepseek-moe-16b-base"
-        AutoMiLoHFModel = DeepSeekMoEMiLo
-    else:
-        NotImplementedError("This model is not implemented yet")
-
-    quant_model_dir = f"{args.base_dir}/model"
-    lorc_dir = f"{args.base_dir}/lorc"
-    lorc_dtype = "int3"
-    with open(f"{args.base_dir}/ranks.json", "r", encoding="utf-8") as f:
-        ranks  = json.load(f)
-
-    model = AutoMiLoHFModel.from_compressed(quant_model_dir,LoRC_weight_path=lorc_dir,
-                                        LoRC_dtype = lorc_dtype,
-                                        ranks=ranks)
-    tokenizer    = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token =tokenizer.eos_token
-
-    save_file_path = os.path.join(args.base_dir, "eval_result.json")
+def eval_zeroshot(model,tokenizer,result_save_path):
+    begin = time.time()
+    print(f"Start zero-shot evaluation")
+    save_file_path = os.path.join(result_save_path, "eval_result.json")
 
     all_metrics = {}
     if os.path.exists(save_file_path):
@@ -83,14 +49,12 @@ def main():
 
         with open(save_file_path, 'w') as file:
             json.dump(all_metrics, file, indent=4)
-
+    end = time.time()
     print(">>>>> Results <<<<<")
-    average = sum(v for v in all_metrics.values()) / len(all_metrics)
-    all_metrics["average"] = average
+    # average = sum(v for v in all_metrics.values()) / len(all_metrics)
+    # all_metrics["average"] = average
     print(f"Metrics: {all_metrics}")
+    print(f"Evaluation time: {end - begin:.2f}s")
     
 
-
-if __name__ == "__main__":
-    main()
     

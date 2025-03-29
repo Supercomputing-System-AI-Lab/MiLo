@@ -1,8 +1,9 @@
-import torch
+
 import gc
 import math
 from typing import Union
 from .bitpack import BitPack
+import torch
 
 def cleanup() -> None:
     try:
@@ -71,16 +72,31 @@ def decode_safetensor_type(data, data_type):
     if data_type is torch.dtype:
         return eval("".join([chr(i) for i in data]))
 
+def unpack_3bit_32(W_q: torch.Tensor, dtype=torch.int8) -> torch.Tensor: #dtype = uint8?
+        
+    _step = W_q.shape[0]
+    tmp = torch.empty([10 * _step, W_q.shape[1]], dtype=dtype, device="cuda")
+
+    tmp[0 * _step : 1 * _step] = (W_q & 0b00111000000000000000000000000000) >> 27
+    tmp[1 * _step : 2 * _step] = (W_q & 0b00000111000000000000000000000000) >> 24
+    tmp[2 * _step : 3 * _step] = (W_q & 0b00000000111000000000000000000000) >> 21
+    tmp[3 * _step : 4 * _step] = (W_q & 0b00000000000111000000000000000000) >> 18
+    tmp[4 * _step : 5 * _step] = (W_q & 0b00000000000000111000000000000000) >> 15
+    tmp[5 * _step : 6 * _step] = (W_q & 0b00000000000000000111000000000000) >> 12
+    tmp[6 * _step : 7 * _step] = (W_q & 0b00000000000000000000111000000000) >> 9
+    tmp[7 * _step : 8 * _step] = (W_q & 0b00000000000000000000000111000000) >> 6
+    tmp[8 * _step : 9 * _step] = (W_q & 0b00000000000000000000000000111000) >> 3
+    tmp[9 * _step : 10 * _step] = W_q & 0b00000000000000000000000000000111
+    return tmp
+
 def compensator_dequantize(UV_quantized, orig_shape, rank, compensator_quantize_gs, compensator_dtype):
     if compensator_dtype == 'int3':
         zero = 4
     else:
         raise NotImplementedError
-    print(orig_shape)
     (U_scale,U_packed),(V_scale,V_packed) = UV_quantized
-    U_q = BitPack.unpack_3bit_32(U_packed)
-    V_q = BitPack.unpack_3bit_32(V_packed)
-
+    U_q = unpack_3bit_32(U_packed)
+    V_q = unpack_3bit_32(V_packed)
     U_q = U_q[:int(orig_shape[0] * (rank / compensator_quantize_gs)),:]
 
     V_q = V_q[:int(orig_shape[1] * rank / compensator_quantize_gs), :]
