@@ -1,6 +1,6 @@
 # MiLo API
 
-MiLo is a MoE quantization algorithm, focusing on ultra-low-bit quantization, e.g. 3-bit, with fast execution speed and high quantization quality. 
+MiLo is a MoE compression algorithm, focusing on ultra-low-bit quantization, e.g. 3-bit, with compensators aiming at a fast execution speed and high quantization quality. 
 
 MiLo introduces the adaptive Low-rank compensators, which compensate for the error of the ultra-low-bit quantization with a minimal additional memory overhead. The adaptive low-rank compensator determines the rank according to the property of the weight, leading to a significant performance improvement.
 
@@ -8,7 +8,7 @@ MiLo also brings INT3 CUDA kernel, which optimizes the dequantization, GeMM, and
 
 ## Features
 
-- Optimization based quantization algorithm with fast execution speed
+- Optimization based quantization and compensation algorithm with fast execution speed
 - Quantized low rank compensator
 - INT3 Kernel to accelerate quantized model inference
 - Adaptive rank selection strategy to suit the tradeoff between performance and memory
@@ -75,7 +75,7 @@ AutoMiLoHFModel.save_compressed(model, quant_model_dir)
 
 ## Examples
 
-We also provide MiLo compression example to compress DeepSeek-MoE [MiLo_quant_DeepSeek.py](MiLo_quant_DeepSeek.py) at and Mixtral-8x7B at [MiLo_quant_Mixtral.py](MiLo_quant_Mixtral.py), also an evaluation script at [MiLo_eval.py](MiLo_eval.py), including Wikitext2 perplexity, zero-shot evaluation, and few-shots evaluation.
+We also provide MiLo compression example to compress DeepSeek-MoE [MiLo_compress_DeepSeek.py](MiLo_compress_DeepSeek.py) at and Mixtral-8x7B at [MiLo_compress_Mixtral.py](MiLo_compress_Mixtral.py), also an evaluation script at [MiLo_eval.py](MiLo_eval.py), including Wikitext2 perplexity, zero-shot evaluation, and few-shots evaluation.
 
 ## License
 
