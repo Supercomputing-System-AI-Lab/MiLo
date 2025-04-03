@@ -8,9 +8,9 @@ MiLo also brings INT3 CUDA kernel, which optimizes the dequantization, GeMM, and
 
 ## Features
 
-- Optimization based quantization and compensation algorithm with fast execution speed
+- Optimization based quantization and compensation algorithm with fast compression speed
 - Quantized low rank compensator
-- INT3 Kernel to accelerate quantized model inference
+- Highly efficient INT3 Kernel to accelerate quantized model inference
 - Adaptive rank selection strategy to suit the tradeoff between performance and memory
 
 ## Installation of Python Packages
