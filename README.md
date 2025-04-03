@@ -1,4 +1,4 @@
-# MiLo API
+# MiLo
 
 MiLo is a MoE compression algorithm, focusing on ultra-low-bit quantization, e.g. 3-bit, with compensators aiming at a fast execution speed and high quantization quality. 
 
