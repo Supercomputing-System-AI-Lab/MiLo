@@ -9,7 +9,7 @@ import milo
 
 import time
 
-def benchmark(f, warmup=20, iter=500):
+def benchmark(f, warmup=40, iter=800):
     for i in range(warmup + iter):
         f()
         if i == warmup - 1:
@@ -37,19 +37,41 @@ def get_problem(m, n, k, groupsize=64):
 def benchmark_dense(A, B, C):
     res = benchmark(lambda: torch.matmul(A, B, out=C))
     return {
-        's': res,
+        'ms': 1000 * res,
         'TFLOP': (2 * A.numel() * C.shape[1])/ 10 ** 12,
         'GB': (2 * A.numel() + 2 * B.numel() + 2 * C.numel()) / 10 ** 9
     }
 
-def benchmark_quant(A, B1, B2, C, s, z,thread_k, thread_n, sms):
+def benchmark_quant(A, B1, B2, C, s, z,thread_k, thread_n, sms, test = 'asymmetirc'):
     workspace = torch.zeros((C.shape[1] // 128) * 16, device=torch.device('cuda:0'))
-    res = benchmark(lambda: milo.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
-    return {
-        's': res,
-        'TFLOP': (2 * A.numel() * C.shape[1])/ 10 ** 12,
-        'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
-    }
+    if test ==  'asymmetirc':
+        res = benchmark(lambda: milo.mul_3bit_with_zeros(A, B1, B2, C, s,z, workspace, thread_k, thread_n, sms))
+        return {
+            'ms': 1000 * res,
+            'TFLOP': (2 * A.numel() * C.shape[1] + 2 * A.shape[1] * C.shape[1])/ 10 ** 12,
+            'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
+        }
+    if test =='dequant_ablation':
+        res = benchmark(lambda: milo.mul_dequant_ablation(A, B1, B2, C, s,z, workspace, thread_k, thread_n, sms))
+        return {
+            'ms': 1000 * res,
+            'TFLOP': (2 * A.numel() * C.shape[1] + A.shape[1] * C.shape[1])/ 10 ** 12,
+            'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
+        }
+    if test =='pipeline_ablation':
+        res = benchmark(lambda: milo.mul_pipeline_ablation(A, B1, B2, C, s,z, workspace, thread_k, thread_n, sms))
+        return {
+            'ms': 1000 * res,
+            'TFLOP': (2 * A.numel() * C.shape[1] + A.shape[1] * C.shape[1])/ 10 ** 12,
+            'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
+        }        
+    else:
+        res = benchmark(lambda: milo.mul_3bit(A, B1, B2, C, s, workspace, thread_k, thread_n, sms))
+        return {
+            'ms': 1000 * res,
+            'TFLOP': (2 * A.numel() * C.shape[1] + A.shape[1] * C.shape[1])/ 10 ** 12,
+            'GB': (2 * A.numel() + 4 * B1.numel() + 4 * B2.numel() + 2 * C.numel() + 2 * s.numel() +  2 * z.numel()) / 10 ** 9
+        }
 
 # Pass the SM count for known GPUs to avoid the kernel having to query this information (this is very minor)
 gpu = torch.cuda.get_device_name(0)
@@ -65,18 +87,12 @@ else:
     SMS = -1
 
 MODELS = { #(k,n)
-   'ideal': [
-       (4 * 256 * SMS, 256 * SMS)  
-],
- 'deepseek' : [(2048, 11008),(11008,2048),(2048, 11008)],
-'mixtral' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
+#    'ideal': [
+#        (4 * 256 * SMS, 256 * SMS)  
+# ],
+'deepseek' : [(2048, 11008),(11008,2048),(2048, 11008)],
 'arctic' : [(7168,4864),(4864, 7168),(7168,4864)],
-   'Llama65B': [
-        (8192, 3 * 8192),
-        (8192, 8192),
-        (8192, 2 * 21760),
-        (21760, 8192)
-    ],
+'mixtral' : [(4096, 14336),(14336, 4096),(4096, 14336)], 
    'Falcon180B' : [(14848, 14848 * 5 + 1024),(14848 * 5, 14848)],
 
 #     'deepseek1' : [(2048, 11008)],
@@ -94,35 +110,37 @@ for groupsize in [64] :
     dev = torch.device('cuda:0')
     for model, layers in MODELS.items():
         print(model)
-        batchsizes = [1,16,32]
+        batchsizes = [16]
         for batch in batchsizes: 
-            for sms in [108]:
-                tot_q = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
-                tot_d = {'s': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
-
-                for layer in layers:
-                    A, B1, B2, C, B_ref, s, z = get_problem(batch, layer[1], layer[0], groupsize)
-                    res_d = benchmark_dense(A, B_ref, C)
-                    if model == 'ideal' or model == 'arctic':
-                        res_q = benchmark_quant(A, B1, B2, C, s,z,128, 128, SMS)
-                    else:
-                        res_q = benchmark_quant(A, B1, B2, C, s,z,-1, -1, SMS)
-                    tot_q['s'] += res_q['s']
-                    tot_q['memory'] += res_q['GB']
-                    tot_q['TFLOP'] += res_q['TFLOP']
-                    tot_d['s'] += res_d['s']
-                    
-                tot_q['TFLOP/s']  =  tot_q['TFLOP'] / tot_q['s'] 
-                tot_q['GB/s']  =  tot_q['memory'] / tot_q['s']  
-                tot_q['speedup'] = tot_d['s'] / tot_q['s']
-                print('sms = %04d: ,batch=%04d: s=%.5f, TFLOP/s=%.3f, GB/s=%.3f, speedup=%.2f, memory(MB)=%.2f, parametersnum : %.2f' % (
-                    sms,
-                    batch,
-                    tot_q['s'],
-                    tot_q['TFLOP/s'],
-                    tot_q['GB/s'],
-                    tot_q['speedup'],
-                    tot_q['memory'],
-                    layers[0][0] * layers[0][1] / 10**9
-                ))
+            sms = 108
+            #for thread_k, thread_n in [(128, 128),(64, 256),(256, 64)]:
+            tot_q = {'ms': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
+            tot_d = {'ms': 0, 'TFLOP/s': 0, 'GB/s': 0, 'speedup': 0,'memory' : 0, 'TFLOP': 0}  
+            for layer in layers:
+                if model == 'Falcon180B':
+                    thread_k, thread_n = 64, 256
+                elif layer[1] * 2 < layer[0] and model not in ['arctic', 'ideal'] and batch <= 16:
+                    thread_k, thread_n = 256, 64
+                else:
+                    thread_k, thread_n = 128, 128
+                A, B1, B2, C, B_ref, s, z = get_problem(batch, layer[1], layer[0], groupsize)
+                res_d = benchmark_dense(A, B_ref, C)
+                res_q = benchmark_quant(A, B1, B2, C, s, z, thread_k, thread_n, SMS)
+                tot_q['ms'] += res_q['ms']
+                tot_q['memory'] += res_q['GB']
+                tot_q['TFLOP'] += res_q['TFLOP']
+                tot_d['ms'] += res_d['ms']
+                
+            tot_q['TFLOP/s']  =  1000 * tot_q['TFLOP'] / tot_q['ms'] 
+            tot_q['GB/s']  =  1000 * tot_q['memory'] / tot_q['ms']  
+            tot_q['speedup'] = tot_d['ms'] / tot_q['ms']
+            print('threadk=%04d,thread_n=%04d: ,batch=%04d: ms=%.5f, TFLOP/s=%.3f, GB/s=%.3f, speedup=%.2f' % (
+                thread_k,
+                thread_n,
+                batch,
+                tot_q['ms'],
+                tot_q['TFLOP/s'],
+                tot_q['GB/s'],
+                tot_q['speedup'],
+            ))
         print()
