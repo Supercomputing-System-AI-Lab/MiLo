@@ -1,5 +1,6 @@
 # MiLo
 This is the official code implementation of MiLo: Efficient Quantized MoE Inference with Mixture of Low-Rank Compensators [MLSys 2025]
+
 MiLo is a MoE compression algorithm, focusing on ultra-low-bit quantization, e.g. 3-bit, with compensators aiming at a fast execution speed and high quantization quality. 
 
 MiLo introduces the adaptive Low-rank compensators, which compensate for the error of the ultra-low-bit quantization with a minimal additional memory overhead. The adaptive low-rank compensator determines the rank according to the property of the weight, leading to a significant performance improvement.
