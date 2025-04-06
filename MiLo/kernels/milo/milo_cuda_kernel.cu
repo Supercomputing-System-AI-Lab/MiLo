@@ -18,7 +18,6 @@
 #ifndef MILO_CUDA_KERNEL_CUH
 #define MILO_CUDA_KERNEL_CUH
 
-
 #include <cuda.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
@@ -240,18 +239,6 @@ __global__ void MiLo(
   int  prob_k, // reduction dimension k
   int* locks // extra global storage for barrier synchronization 
 ) {
-  // Each threadblock processes one "stripe" of the B matrix with (roughly) the same size, which might involve multiple 
-  // column "slices" (of width 16 * `thread_n_blocks`). Stripes are defined as shown in the 3x3 matrix 5 SM example: 
-  //   0 1 3 
-  //   0 2 3
-  //   1 2 4
-  // While this kind of partitioning makes things somewhat more complicated, it ensures good utilization of all SMs
-  // for many kinds of shape and GPU configurations, while requiring as few slow global cross-threadblock reductions as 
-  // possible.
-  
-  // For larger GEMMs we run multiple batchsize 64 versions in parallel for a better partitioning with less reductions
-  //if( threadIdx.x == 0 & blockIdx.x == 0)
-  //  printf("get s: %d, get s: %d, get s: %d, get s: %d", ((int*)s)[0], ((int*)s)[1], ((int*)s)[2], ((int*)s)[3]);
   int parallel = 1;
   if (prob_m > 16 * thread_m_blocks) {
     parallel = prob_m / (16 * thread_m_blocks);
@@ -261,11 +248,6 @@ __global__ void MiLo(
   int k_tiles = prob_k / 16 / thread_k_blocks;
   int n_tiles = prob_n / 16 / thread_n_blocks;
   int iters = ceildiv(k_tiles * n_tiles * parallel, gridDim.x);
-  //printf("here!%d,  %d, %d, %d, \n",iters, parallel, n_tiles, k_tiles);
-  // Ensure that the number of tiles in each stripe is a multiple of the groupsize; this avoids an annoying special case
-  // where a stripe starts in the middle of group.
-//   if (group_blocks != -1)
-//     iters = (group_blocks / thread_k_blocks) * ceildiv(iters, (group_blocks / thread_k_blocks)); //4,
 
   int slice_row = (iters * blockIdx.x) % k_tiles;
   int slice_col_par = (iters * blockIdx.x) / k_tiles;
@@ -359,9 +341,8 @@ __global__ void MiLo(
   int b_sh_rd = threadIdx.x;
 
   int s_sh_wr = 2 *thread_n_blocks * (threadIdx.x / 32) + (threadIdx.x % 32);
-  //int s_iter = thread_k_blocks / group_blocks;
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks + threadIdx.x / 32) + s_sh_stride * slice_col + threadIdx.x % 32;
-  int s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
+  int s_sh_rd =  s_sh_stride * (((threadIdx.x / 32) / (thread_n_blocks / 4))/4) + 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
   int s_sh_rd_delta;
   if (thread_k_blocks / group_blocks > 1) {
     s_sh_rd_delta = 16;
@@ -511,7 +492,6 @@ __global__ void MiLo(
     scale(frag_b0, frag_s[k_mod_2][3], 0);
     frag_b1 = dequant(b_quant_shift);
     scale(frag_b1, frag_s[k_mod_2][3], 1);
-    //printf("3,%x , %x, %x,%x, %x, %x \n:", b_quant, b_quant_shift,frag_b0[0],frag_b0[1],frag_b1[0],frag_b1[1]);    
     #pragma unroll
     for (int i = 0; i < thread_m_blocks; i++) {
       mma(frag_a[k_mod_2][i], frag_b0, frag_c[i][3][0]);
@@ -528,11 +508,7 @@ __global__ void MiLo(
       int red_idx = threadIdx.x / b_sh_stride;
       constexpr int red_sh_stride = b_sh_stride * 4 * 2;
       constexpr int red_sh_delta = b_sh_stride; 
-      int red_sh_rd = red_sh_stride * (threadIdx.x / b_sh_stride) + (threadIdx.x % b_sh_stride);
-
-      // Parallel logarithmic shared memory reduction. We make sure to avoid any unnecessary read or write iterations,
-      // e.g., for two warps we write only once by warp 1 and read only once by warp 0. 
-      
+      int red_sh_rd = red_sh_stride * (threadIdx.x / b_sh_stride) + (threadIdx.x % b_sh_stride);     
       #pragma unroll
       for (int m_block = 0; m_block < thread_m_blocks; m_block++) {
         #pragma unroll
@@ -549,8 +525,6 @@ __global__ void MiLo(
                   reinterpret_cast<FragC*>(frag_c)[4 * 2 * m_block + j][k] += c_rd[k] + c_wr[k];
               }
             sh[red_sh_wr] = reinterpret_cast<int4*>(&frag_c)[4 * 2 * m_block + j];
-              //sh[red_sh_wr] = reinterpret_cast<int4*>(&(frag_c[m_block][j/2][j%2]))[0]; 
-
             }
           }
           __syncthreads();
@@ -563,8 +537,6 @@ __global__ void MiLo(
             #pragma unroll
             for (int j = 0; j < 4; j++){
               reinterpret_cast<FragC*>(frag_c)[4 * 2 * m_block + i][j] += c_rd[j];
-            //   if (threadIdx.x == 0 && blockIdx.x == 0)
-            //    printf("m: %d, i: %d, j: %d c_rd: %f, fragc : %f \n",m_block, i, j, c_rd[j], reinterpret_cast<FragC*>(frag_c)[4 * 2 * m_block + i][j]);
             }
           }
         }
@@ -588,7 +560,6 @@ __global__ void MiLo(
       c_gl_wr += (2 * thread_n_blocks) * slice_col;
       constexpr int c_sh_wr_delta = active_threads;
       int c_sh_wr = threadIdx.x;
-
       int row = (threadIdx.x % 32) / 4;
 
       if (!first) {
@@ -661,13 +632,9 @@ __global__ void MiLo(
     if (threadIdx.x / 32 < thread_n_blocks / 4) {
       #pragma unroll
       for (int i = 0; i < thread_m_blocks; i++) {
-        //printf("frag_c0 : %f, frag_c1 : %f, s : %x  \n", frag_c[i][0][0][0], frag_c[i][0][0][1], frag_s[0][0]);
         #pragma unroll
         for (int j = 0; j < 4; j++) {
           int wr = c_sh_wr + 8 * j;
-          //if (frag_c[i][j][0][0] != 384.0 | frag_c[i][j][0][2] != 384.0 | frag_c[i][j][1][2] != 384.0 | frag_c[i][j][1][0] != 384.0)
-          //if (blockIdx.x == 0 && threadIdx.x == 0)
-            //printf("block: %d, thread: %d, i : %d, j : %d, c0: %f, c1: %f, s: %x \n", blockIdx.x, threadIdx.x,i, j, frag_c[i][j][0][0], frag_c[i][j][0][1], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 0 + 0, frag_c[i][j][0][0], frag_c[i][j][0][1], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 8 + 0, frag_c[i][j][0][2], frag_c[i][j][0][3], frag_s[j / 2][2 * (j % 2) + 0]);
           write(wr + (4 * c_sh_stride) * 0 + 4, frag_c[i][j][1][0], frag_c[i][j][1][1], frag_s[j / 2][2 * (j % 2) + 1]);
@@ -702,21 +669,16 @@ __global__ void MiLo(
   };
   start_pipes();
   // Main loop.
-   //printf("slice_iters %d, stages%d, \n",slice_iters, stages);
   while (slice_iters) {
     // We unroll over both the global fetch and the register load pipeline to ensure all shared memory accesses are
     // static. Note that both pipelines have even length meaning that the next iteration will always start at index 0.
-    //printf("before loop\n");
-    //printf("slice_iters %d, stages%d, \n",slice_iters, stages);
     #pragma unroll
     for (int pipe = 0; pipe < stages;) {
       #pragma unroll
       for (int k = 0; k < b_sh_wr_iters; k++) {
         fetch_to_registers(k + 1, pipe % stages);
         if (k == b_sh_wr_iters - 2) {
-          //if(blockIdx.x == 0 && threadIdx.x == 0) printf("slice_iters %d, stages%d, \n",slice_iters, stages);
           fetch_to_shared((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
-          //fetch_to_shared_faster((pipe + stages - 1) % stages, pipe, slice_iters >= stages);
           pipe++;
           wait_for_stage();
         }
@@ -725,10 +687,7 @@ __global__ void MiLo(
       slice_iters--;
       if (slice_iters == 0)
         break;
-    }
-      //printf("right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-      //printf("wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-          
+    }        
     a_gl_rd += a_gl_rd_delta_o * stages;
     
     // Process results and, if necessary, proceed to the next column slice. While this pattern may not be the most
@@ -736,42 +695,17 @@ __global__ void MiLo(
     if (slice_iters == 0) {
       cp_async_wait<0>();
       bool last = slice_idx == slice_count - 1;
-      // For per-column scales, we only fetch them here in the final step before write-out
-      /*
-      if(threadIdx.x == 0 && blockIdx.x == 0){
-        printf("right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-        printf("wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-      }*/
-      //__syncthreads();
+
       thread_block_reduce();
 
-      //__syncthreads();
-      //if(threadIdx.x == 0 && blockIdx.x == 0){
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][0][0][0], frag_c[0][0][0][1], frag_c[0][0][0][2], frag_c[0][0][0][3]);
-
-        //printf("thread reduce right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][3][0][0], frag_c[0][3][0][1], frag_c[0][3][0][2], frag_c[0][3][0][3]);
-
-       // printf("thread reduce wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-     // }
-      // __syncthreads();
-
-
       if (slice_count > 1) { // only globally reduce if there is more than one block in a slice
-        //printf("thread %d, block %d, use the global_reduce \n",threadIdx.x, blockIdx.x);
         barrier_acquire(&locks[slice_col], slice_idx);
         global_reduce(slice_idx == 0, last);
         barrier_release(&locks[slice_col], last);
       }
 
-      //if(threadIdx.x == 0 && blockIdx.x == 0){
-      //  printf("global right thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][1][0][0], frag_c[0][1][0][1], frag_c[0][1][0][2], frag_c[0][1][0][3]);
-      //  printf("global wrong thread %d, block %d, c0 %f, c1 %f , c2 %f, c3 %f \n",threadIdx.x, blockIdx.x, frag_c[0][2][0][0], frag_c[0][2][0][1], frag_c[0][2][0][2], frag_c[0][2][0][3]);
-      //}
-
       if (last) // only the last block in a slice actually writes the result
       {
-       //printf("write blockIdx.x : %d \n", blockIdx.x);
         write_result();
       }        
       slice_row = 0;
@@ -908,7 +842,7 @@ int milo_cuda(
     if (false) {}
     CALL_IF(1,  8,  8,  4)
     CALL_IF(2,  8,  8,  4)
-    //CALL_IF(1,  4,  16,  4)
+    CALL_IF(1,  4,  16,  4)
     CALL_IF(1, 16,  4,  4)
     CALL_IF(2, 16,  4,  4)
     CALL_IF(3, 16,  4,  4)
