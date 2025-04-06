@@ -2,10 +2,9 @@ import torch
 import sys
 import milo
 from ..core.quantize import HQQLinear, Quantizer
-from ..core.peft import HQQLinearLoRA
 
 
-class MiLoWithZeros(torch.nn.Module):
+class MiLo_Asymmetric_Linear(torch.nn.Module):
     def __init__(self, W: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor, u: None, v: None,
                  bias=None, groupsize=64):
         super().__init__()
@@ -80,12 +79,10 @@ class MiLoWithZeros(torch.nn.Module):
         return out
 
 
-def patch_hqq_to_miloWithZeros(layer, patch_params):
+def patch_hqq_to_milo_asymmetric(layer, patch_params):
     hqq_layer = None
     if isinstance(layer, HQQLinear):
         hqq_layer = layer
-    elif isinstance(layer, HQQLinearLoRA):
-        hqq_layer = layer.linear_layer
 
     if hqq_layer is None:
         return layer
@@ -120,7 +117,7 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     else:
         u = None
         v = None
-    milo_withzero_layer = MiLoWithZeros(
+    MiLo_Asymmetric_Linear_layer = MiLo_Asymmetric_Linear(
         W_r.t(), s.t(), z.t(),u, v, bias=hqq_layer.bias
     )
 
@@ -131,14 +128,11 @@ def patch_hqq_to_miloWithZeros(layer, patch_params):
     torch.cuda.empty_cache()
 
     if isinstance(layer, HQQLinear):
-        return  milo_withzero_layer
-    if isinstance(layer, HQQLinearLoRA):
-        layer.linear_layer =  milo_withzero_layer
-
+        return  MiLo_Asymmetric_Linear_layer
     return layer
 
 
-class MiLoLayer(torch.nn.Module):
+class MiLo_Symmetric_Layer(torch.nn.Module):
     def __init__(self, W: torch.Tensor, scales: torch.Tensor, qz=None,u=None, v=None
                  bias=None, groupsize=64):
         super().__init__()
@@ -218,7 +212,7 @@ class MiLoLayer(torch.nn.Module):
 
 
 # ONLY WORKS WITH AXIS=1, group_size=64
-def patch_hqq_to_milo(layer, patch_params):
+def patch_hqq_to_milo_symmetric(layer, patch_params):
     hqq_layer = None
     if isinstance(layer, HQQLinear):
         hqq_layer = layer
@@ -271,7 +265,7 @@ def patch_hqq_to_milo(layer, patch_params):
     else:
         u = None
         v = None
-    milo_layer = MiLoLayer(
+    milo_layer = MiLo_Symmetric_Layer(
         W_r.t(),
         s.t(),
         qz.t() if (qz is not None) else None,
