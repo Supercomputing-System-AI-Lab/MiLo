@@ -1,11 +1,6 @@
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2023
-#####################################################
-
 import transformers
 import torch
-from .base import HQQWrapper
-
-
+from .base import MiLoWrapper
 from MiLo.models.hf.mixtral import MixtralMiLo
 
 
@@ -21,7 +16,7 @@ AutoTokenizer = transformers.AutoTokenizer
 _Parent = transformers.AutoModelForCausalLM
 
 
-class HQQModelForCausalLM(_Parent, HQQWrapper):
+class MiLoModelForCausalLM(_Parent, MiLoWrapper):
     _HQQ_REGISTRY = _MiLo_REGISTRY
 
     def __init__(self, *args, **kwargs):

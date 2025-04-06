@@ -1,7 +1,8 @@
 import json
 from ..core.quantize import MiLoLinear
 from .utils import compensator_dequantize
-from pathlib import Path
+import importlib.resources as pkg_resources
+from ..core import model_statistics
 
 MIXTRAL_LAYERS = {
     "dense": ["self_attn"],
@@ -31,9 +32,7 @@ def rank_generate(model_id, sparse_rank,dense_rank,strategy):
         ranks = {
             **{name: dense_rank for name in model_layer_info["dense"]},
         }
-        script_dir = Path(__file__).resolve().parent
-        expt_freq_path = script_dir / "model_statistics" / "DeepSeek_expt_freq.json"
-        with open(expt_freq_path, "r") as f:
+        with pkg_resources.files(model_statistics).joinpath("DeepSeek_expt_freq.json").open("r") as f:
             data = json.load(f)
         for layer_index in range(27):
             freq = data[layer_index]
@@ -52,9 +51,7 @@ def rank_generate(model_id, sparse_rank,dense_rank,strategy):
             k = 3
         else:
             raise NotImplementedError("Currently Mixtral Kurtosis strategy only support the avg rank of 16 and 32")
-        script_dir = Path(__file__).resolve().parent
-        kurtosis_path = script_dir / "model_statistics" / "Mixtral_kurtosis_values.json"
-        with open(kurtosis_path, "r") as f:
+        with pkg_resources.files(model_statistics).joinpath("Mixtral_kurtosis_values.json").open("r") as f:
             data = json.load(f)
         for name, kurtosis in data.items():
             kurtosis = round(float(kurtosis))

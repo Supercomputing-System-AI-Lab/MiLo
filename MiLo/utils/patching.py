@@ -9,9 +9,9 @@ from ..models.hf.base import AutoMiLoHFModel
 
 from termcolor import colored
 try:
-    from ..backends.marlin import patch_hqq_to_marlin
+    from ..backends.marlin import patch_milo_to_marlin
 except Exception:
-        patch_hqq_to_marlin = None
+        patch_milo_to_marlin = None
         print(colored('Warning: failed to import the Marlin backend. Check if marlin is correctly installed if you want to use the Marlin backend (https://github.com/IST-DASLab/marlin).', 'yellow'))
 try:
    from ..backends.milo import patch_hqq_to_miloWithZeros
@@ -99,8 +99,8 @@ def prepare_for_inference(model, allow_merge=False, backend="default", verbose=F
     patch_linearlayers(model, patch_lora_inference)
     cleanup()
 
-    if backend == "marlin" and (patch_hqq_to_marlin is not None):
-        patch_linearlayers(model, patch_hqq_to_marlin, verbose=verbose)
+    if backend == "marlin" and (patch_milo_to_marlin is not None):
+        patch_linearlayers(model, patch_milo_to_marlin, verbose=verbose)
         cleanup()
     if backend == "milo" and (patch_hqq_to_miloWithZeros is not None):
         patch_linearlayers(model, patch_hqq_to_miloWithZeros, verbose=verbose)

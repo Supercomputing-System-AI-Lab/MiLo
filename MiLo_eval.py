@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from MiLo.core.quantize import *
 from MiLo.models.hf.mixtral import MixtralMiLo as AutoMiLoHFModel
 # from MiLo.models.hf.deepseek import DeepSeekMoEMiLo
