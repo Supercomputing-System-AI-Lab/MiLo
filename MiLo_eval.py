@@ -6,7 +6,7 @@ from evaluation.eval_wikitext2_ppl import eval_wikitext2_perplexity
 
 
 from evaluation.eval_fewshots import eval_fewshots
-#from evaluation.eval_zeroshot import eval_zeroshot
+from evaluation.eval_zeroshot import eval_zeroshot
 
 
 def main():
@@ -17,10 +17,10 @@ def main():
     tokenizer  = AutoTokenizer.from_pretrained(model_id,trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token =tokenizer.eos_token
-    #eval_zeroshot(model,tokenizer,quant_model_dir)
     from MiLo.utils.patching import prepare_for_inference
     prepare_for_inference(model, backend="milo_asymmetric", verbose=True)
-   #eval_wikitext2_perplexity(model,tokenizer,quant_model_dir)  
+    eval_zeroshot(model,tokenizer,quant_model_dir)
+    eval_wikitext2_perplexity(model,tokenizer,quant_model_dir)  
     eval_fewshots(model,tokenizer,quant_model_dir)
 
     return

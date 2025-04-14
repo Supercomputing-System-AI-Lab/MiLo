@@ -70,6 +70,8 @@ AutoMiLoHFModel.compress_model(model,
 			   device=device)    
 AutoMiLoHFModel.save_compressed(model, quant_model_dir)
 
+from MiLo.utils.patching import prepare_for_inference
+prepare_for_inference(model, backend="milo_asymmetric", verbose=True)
 ```
 
 
