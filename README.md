@@ -1,4 +1,5 @@
 # MiLo
+This is the official code implementation of [MiLo: Efficient Quantized MoE Inference with Mixture of Low-Rank Compensators](https://arxiv.org/abs/2504.02658) [MLSys 2025]
 
 MiLo is a MoE compression algorithm, focusing on ultra-low-bit quantization, e.g. 3-bit, with compensators aiming at a fast execution speed and high quantization quality. 
 
@@ -8,7 +9,7 @@ MiLo also brings INT3 CUDA kernel, which optimizes the dequantization, GeMM, and
 
 ## Features
 
-- Optimization based quantization and compensation algorithm with fast compression speed
+- Optimization-based quantization and compensation algorithm with fast compression speed
 - Quantized low rank compensator
 - Highly efficient INT3 Kernel to accelerate quantized model inference
 - Adaptive rank selection strategy to suit the tradeoff between performance and memory
@@ -70,7 +71,8 @@ AutoMiLoHFModel.compress_model(model,
 AutoMiLoHFModel.save_compressed(model, quant_model_dir)
 
 
-
+from MiLo.utils.patching import prepare_for_inference
+prepare_for_inference(model, backend="milo_asymmetric", verbose=True)
 ```
 
 
@@ -84,10 +86,11 @@ MIT license
 
 ## Citation
 ```
-@article{beichen-milo,
-  title={MiLo: Efficient Quantized MoE Inference with Mixture of Low-Rank Compensators}, 
-  author={Beichen Huang, Yueming Yuan, Zelei Shao, and Minjia Zhang},
-  year={2025},
+@article{huang2025milo,
+  title={MiLo: Efficient Quantized MoE Inference with Mixture of Low-Rank Compensators},
+  author={Huang, Beichen and Yuan, Yueming and Shao, Zelei and Zhang, Minjia},
+  journal={arXiv preprint arXiv:2504.02658},
+  year={2025}
 }
 ```
 

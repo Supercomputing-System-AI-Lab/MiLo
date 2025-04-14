@@ -1,5 +1,3 @@
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2023
-#####################################################
 from abc import abstractmethod
 from ..models.base import BaseMiLoModel
 import torch
@@ -9,7 +7,7 @@ from typing import Union
 # Wrapper that makes it easier to add quantization support to different engines (HF, VLLM, etc.)
 
 
-class HQQWrapper:
+class MiLoWrapper:
     @abstractmethod
     def _get_arch_key_from_save_dir(cls, save_dir: str):
         pass

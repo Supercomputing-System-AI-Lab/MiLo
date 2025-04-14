@@ -70,7 +70,7 @@ class MarlinLinear(torch.nn.Module):
 
 
 # ONLY WORKS WITH AXIS=1, group_size= - 1
-def patch_hqq_to_marlin(layer, patch_params):
+def patch_milo_to_marlin(layer, patch_params):
     if marlin is None:
         return layer
 

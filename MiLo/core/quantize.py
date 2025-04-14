@@ -1,16 +1,12 @@
-# Written by Dr. Hicham Badri @Mobius Labs GmbH - 2023
-#####################################################
 import torch
 from torch import uint8, int32, float16, nn, Tensor
 import copy
 from enum import Enum
-from typing import Union
-import numpy as np            
+from typing import Union      
 
 from .utils import is_divisible, encode_safetensor_type, decode_safetensor_type, quantize_full_to_int3,compensator_dequantize
 from .optimize import optimize_weights_proximal
 from .bitpack import BitPack
-from safetensors import safe_open
 
 _META_TYPE = {
     "scale": torch.Tensor,
@@ -698,7 +694,7 @@ class MiLoLinear(nn.Module):
         self.cuda(self.device)
         self.ready = True
 
-        # Set in_features/out_features
+        # Set in_features/out_featuresx
         self.in_features, self.out_features = self.meta["shape"][::-1]
 
     
@@ -792,16 +788,14 @@ class MiLoLinear(nn.Module):
         self.ready = True
         if self.UV_quantized is not None:
             self.U,self.V = compensator_dequantize(self.UV_quantized, self.meta["shape"], rank, compensator_params["compensator_quant_gs"], compensator_dtype)
-        # if  "layers.0.self_attn.q_proj" in self.name:
-        #     tosave = {"UV_quantized": self.UV_quantized,
-        #             "U_orig":U,
-        #             "V_orig":V,
-        #             "U":self.U,
-        #             "V":self.V,
-        #             "W_unquant":W_unquant,
-        #     }
-        #     torch.save(tosave,"layers.0.self_attn.q_proj.pt")
-        #     tosave.len()
+        
+        print(f"milo layer contains: {dir(self)}")
+        print(f"milo layer U: {self.U}")
+        print(f"milo layer V: {self.V}")
+        print(f"milo layer meta: {self.meta}")
+        print(f"milo layer UV_quantized: {self.UV_quantized}")
+        print(f"milo layer W_q: {self.W_q}")
+        #print(f"milo layer ready: {self.ready}")
 
     def unpack(self, reshape=False, dtype=None):
         if self.ready is False:

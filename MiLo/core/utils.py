@@ -72,7 +72,7 @@ def decode_safetensor_type(data, data_type):
     if data_type is torch.dtype:
         return eval("".join([chr(i) for i in data]))
 
-def unpack_3bit_32(W_q: torch.Tensor, dtype=torch.int8) -> torch.Tensor: #dtype = uint8?
+def unpack_3bit_32_sign(W_q: torch.Tensor, dtype=torch.int8) -> torch.Tensor: #dtype = uint8?
         
     _step = W_q.shape[0]
     tmp = torch.empty([10 * _step, W_q.shape[1]], dtype=dtype, device="cuda")
@@ -95,8 +95,8 @@ def compensator_dequantize(UV_quantized, orig_shape, rank, compensator_quantize_
     else:
         raise NotImplementedError
     (U_scale,U_packed),(V_scale,V_packed) = UV_quantized
-    U_q = unpack_3bit_32(U_packed)
-    V_q = unpack_3bit_32(V_packed)
+    U_q = unpack_3bit_32_sign(U_packed)
+    V_q = unpack_3bit_32_sign(V_packed)
     U_q = U_q[:int(orig_shape[0] * (rank / compensator_quantize_gs)),:]
 
     V_q = V_q[:int(orig_shape[1] * rank / compensator_quantize_gs), :]

@@ -337,7 +337,7 @@ __global__ void MiLoWithZeros(
   int s_sh_wr = 2 *thread_n_blocks * (threadIdx.x / 32) + (threadIdx.x % 32);
   //int s_iter = thread_k_blocks / group_blocks;
   int s_gl_rd = s_gl_stride * ((thread_k_blocks * slice_row) / group_blocks + threadIdx.x / 32) + s_sh_stride * slice_col + threadIdx.x % 32;
-  int s_sh_rd = 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
+  int s_sh_rd = s_sh_stride * (((threadIdx.x / 32) / (thread_n_blocks / 4))/4) + 8 * ((threadIdx.x / 32) % (thread_n_blocks / 4)) + (threadIdx.x % 32) / 4; //from share to register
   int s_sh_rd_delta;
   if (thread_k_blocks / group_blocks > 1) {
     s_sh_rd_delta = 16;
@@ -844,7 +844,7 @@ int milo_cuda_with_zeros(
     if (false) {}
     CALL_IF(1,  8,  8,  4)
     CALL_IF(2,  8,  8,  4)
-    //CALL_IF(1,  4,  16,  4)
+    CALL_IF(1,  4,  16,  4)
     CALL_IF(1, 16,  4,  4)
     CALL_IF(2, 16,  4,  4)
     CALL_IF(3, 16,  4,  4)

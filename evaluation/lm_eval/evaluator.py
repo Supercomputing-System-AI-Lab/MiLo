@@ -12,7 +12,7 @@ import lm_eval.models
 import lm_eval.api.metrics
 import lm_eval.api.registry
 
-from lm_eval.utils import (
+from .utils import (
     positional_deprecated,
     run_task_tests,
     get_git_commit_hash,

@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+
+# Packaging build folders
+build/
+dist/
+*.egg-info/
+
+
+
+# IDE/editor folders
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+*.log
+
+
+# Test coverage / pytest cache
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Environment/config files
+*.env
+.env.*
+.envrc
+
+# Misc
+*.bak
+*.swp

@@ -16,11 +16,10 @@ from transformers.models.auto.modeling_auto import (
     MODEL_FOR_SEQ_TO_SEQ_CAUSAL_LM_MAPPING_NAMES,
 )
 
-from lm_eval import utils
-from lm_eval.api.instance import Instance
-from lm_eval.api.model import LM
-from lm_eval.api.registry import register_model
-from lm_eval.utils import Collator, stop_sequences_criteria
+from evaluation import utils
+from ...api.instance import Instance
+from ...api.model import LM
+from ...api.registry import register_model
 
 
 eval_logger = utils.eval_logger
