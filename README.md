@@ -69,6 +69,8 @@ AutoMiLoHFModel.compress_model(model,
 			   device=device)    
 AutoMiLoHFModel.save_compressed(model, quant_model_dir)
 
+
+
 ```
 
 
