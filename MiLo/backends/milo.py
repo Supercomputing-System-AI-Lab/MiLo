@@ -1,9 +1,24 @@
 import torch
 import sys
-import milo
-from ..core.quantize import HQQLinear, Quantizer
+import milo 
+from ..core.quantize import MiLoLinear, Quantizer
 
+def compensator_dequantize(UV_quantized, orig_shape, rank, compensator_quantize_gs, compensator_dtype):
+    if compensator_dtype == 'int3':
+        zero = 4
+    else:
+        raise NotImplementedError
+    (U_scale,U_packed),(V_scale,V_packed) = UV_quantized
+    U_q = unpack_3bit_32_sign(U_packed)
+    V_q = unpack_3bit_32_sign(V_packed)
+    U_q = U_q[:int(orig_shape[0] * (rank / compensator_quantize_gs)),:]
 
+    V_q = V_q[:int(orig_shape[1] * rank / compensator_quantize_gs), :]
+
+    U_dq = ((U_q - zero) * 2 * U_scale / 7).reshape(orig_shape[0], -1)
+    V_dq = ((V_q - zero) * 2 * V_scale / 7).reshape(-1, orig_shape[1])
+    return U_dq.half(),V_dq.half()
+    
 class MiLo_Asymmetric_Linear(torch.nn.Module):
     def __init__(self, W: torch.Tensor, scales: torch.Tensor, zeros: torch.Tensor, u: None, v: None,
                  bias=None, groupsize=64):
@@ -64,8 +79,6 @@ class MiLo_Asymmetric_Linear(torch.nn.Module):
             self.scales,
             self.zeros,
             self.workspace_fp,
-            thread_k=64,
-            thread_n=256,
         )
         return out
 
@@ -80,60 +93,80 @@ class MiLo_Asymmetric_Linear(torch.nn.Module):
 
 
 def patch_hqq_to_milo_asymmetric(layer, patch_params):
-    hqq_layer = None
-    if isinstance(layer, HQQLinear):
-        hqq_layer = layer
+    # import sys
+    # print("Starting patch_hqq_to_milo_asymmetric")
+    # sys.stdout.flush()
+    milo_layer = None
+    if isinstance(layer, MiLoLinear):
+        #print("Layer is MiLoLinear")
+        milo_layer = layer
 
-    if hqq_layer is None:
+    if milo_layer is None:
+        print("milo_layer is None, returning original layer")
         return layer
 
-    hqq_layer = layer.linear_layer if hasattr(layer, "linear_layer") else layer
+    milo_layer = layer.linear_layer if hasattr(layer, "linear_layer") else layer
+    # print(f"Layer meta: {milo_layer.meta}")
     # Check config
     if (
-        (hqq_layer.meta["axis"] == 0)
-        or (hqq_layer.meta["group_size"] != 64)
-        or (hqq_layer.meta["nbits"] != 3)
+        (milo_layer.meta["axis"] == 0)
+        or (milo_layer.meta["group_size"] != 64)
+        or (milo_layer.meta["nbits"] != 3)
     ):
-        print("Skipping milo conversion for", hqq_layer)
+        print("Skipping milo conversion for", milo_layer)
         return layer
 
-    z = hqq_layer.meta["zero"]
-    s = hqq_layer.meta["scale"]
+    z = milo_layer.meta["zero"]
+    s = milo_layer.meta["scale"]
 
-    W_r = hqq_layer.unpack(dtype=hqq_layer.compute_dtype)
+    W_r = milo_layer.unpack(dtype=milo_layer.compute_dtype)
     W_r = W_r[: s.shape[0]]
 
     # Combine them
     W_r = (W_r - z) * s
     z = -z * s
 
-    n = hqq_layer.meta["shape"][0]
+    n = milo_layer.meta["shape"][0]
     W_r = W_r.reshape((n, -1))
     s = s.reshape((n, -1))
     z = z.reshape((n, -1))
-    if milo_layer.U != None and milo_layer.V != None:
-        u = milo_layer.U.t() 
+    
+    # print(f"milo layer contains: {dir(milo_layer)}")
+    # print(f"milo layer U: {layer.U}")
+    # print(f"milo layer V: {layer.V}")
+    # print(f"milo layer meta: {milo_layer.meta}")
+    # if milo_layer.UV_quantized is not None:
+    #     print("Found UV_quantized, dequantizing...")
+    #     u, v = compensator_dequantize(milo_layer.UV_quantized, milo_layer.meta["shape"], milo_layer.meta["rank"], milo_layer.meta["compensator_quant_gs"], milo_layer.meta["compensator_dtype"])
+    #     print(f"Dequantized U shape: {u.shape}, V shape: {v.shape}")
+    # else:
+    #     print("UV_quantized is None")
+    if milo_layer.U is not None and milo_layer.V is not None:
+        u = milo_layer.U.t()
         v = milo_layer.V.t()
     else:
         u = None
         v = None
+
     MiLo_Asymmetric_Linear_layer = MiLo_Asymmetric_Linear(
-        W_r.t(), s.t(), z.t(),u, v, bias=hqq_layer.bias
+        W_r.t(), s.t(), z.t(),u,v, bias=milo_layer.bias
     )
 
-    del hqq_layer.W_q
-    del hqq_layer.meta
-    del hqq_layer.bias
-    del hqq_layer
+    del milo_layer.W_q
+    del milo_layer.meta
+    del milo_layer.bias
+    del milo_layer
     torch.cuda.empty_cache()
 
-    if isinstance(layer, HQQLinear):
+    if isinstance(layer, MiLoLinear):
         return  MiLo_Asymmetric_Linear_layer
+    if isinstance(layer, MiLoLinearLoRA):
+        layer.linear_layer = MiLo_Asymmetric_Linear_layer
     return layer
 
 
 class MiLo_Symmetric_Layer(torch.nn.Module):
-    def __init__(self, W: torch.Tensor, scales: torch.Tensor, qz=None,u=None, v=None
+    def __init__(self, W: torch.Tensor, scales: torch.Tensor, qz=None,u=None, v=None,
                  bias=None, groupsize=64):
         super().__init__()
         m, n = W.shape
@@ -214,10 +247,10 @@ class MiLo_Symmetric_Layer(torch.nn.Module):
 # ONLY WORKS WITH AXIS=1, group_size=64
 def patch_hqq_to_milo_symmetric(layer, patch_params):
     hqq_layer = None
-    if isinstance(layer, HQQLinear):
+    if isinstance(layer, MiLoLinear):
         hqq_layer = layer
-    elif isinstance(layer, HQQLinearLoRA):
-        hqq_layer = layer.linear_layer
+    # elif isinstance(layer, MiLoLinearLoRA):
+    #     hqq_layer = layer.linear_layer
 
     if hqq_layer is None:
         return layer
@@ -281,9 +314,9 @@ def patch_hqq_to_milo_symmetric(layer, patch_params):
     del hqq_layer
     torch.cuda.empty_cache()
 
-    if isinstance(layer, HQQLinear):
+    if isinstance(layer, MiLoLinear):
         return milo_layer
-    if isinstance(layer, HQQLinearLoRA):
-        layer.linear_layer = milo_layer
+    # if isinstance(layer, MiLoLinearLoRA):
+    #     layer.linear_layer = milo_layer
 
     return layer

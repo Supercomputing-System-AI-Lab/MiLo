@@ -16,4 +16,3 @@ milo.egg-info/SOURCES.txt
 milo.egg-info/dependency_links.txt
 milo.egg-info/requires.txt
 milo.egg-info/top_level.txt
-milo/__pycache__/__init__.cpython-310.pyc

@@ -694,7 +694,7 @@ class MiLoLinear(nn.Module):
         self.cuda(self.device)
         self.ready = True
 
-        # Set in_features/out_features
+        # Set in_features/out_featuresx
         self.in_features, self.out_features = self.meta["shape"][::-1]
 
     
@@ -788,6 +788,14 @@ class MiLoLinear(nn.Module):
         self.ready = True
         if self.UV_quantized is not None:
             self.U,self.V = compensator_dequantize(self.UV_quantized, self.meta["shape"], rank, compensator_params["compensator_quant_gs"], compensator_dtype)
+        
+        print(f"milo layer contains: {dir(self)}")
+        print(f"milo layer U: {self.U}")
+        print(f"milo layer V: {self.V}")
+        print(f"milo layer meta: {self.meta}")
+        print(f"milo layer UV_quantized: {self.UV_quantized}")
+        print(f"milo layer W_q: {self.W_q}")
+        #print(f"milo layer ready: {self.ready}")
 
     def unpack(self, reshape=False, dtype=None):
         if self.ready is False:

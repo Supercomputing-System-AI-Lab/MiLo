@@ -2,48 +2,60 @@
 #####################################################
 import torch
 from torch import Tensor
-from ..core.quantize import Quantizer, HQQLinear
+from ..core.quantize import Quantizer, MiLoLinear
 from ..core.utils import cleanup
-from ..core.peft import HQQLinearLoRA
-from ..models.hf.base import AutoHQQHFModel
-from ..backends.torchao import patch_hqq_to_aoint4
+#from ..core.peft import MiLoLinearLoRA
+from ..models.hf.base import AutoMiLoHFModel
+#from ..backends.torchao import patch_hqq_to_aoint4
 from termcolor import colored
+import sys
+import os
+
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 try:
-    from ..backends.marlin import patch_hqq_to_marlin
+    from MiLo.backends.marlin import patch_hqq_to_marlin
 except Exception:
         patch_hqq_to_marlin = None
         print(colored('Warning: failed to import the Marlin backend. Check if marlin is correctly installed if you want to use the Marlin backend (https://github.com/IST-DASLab/marlin).', 'yellow'))
 try:
-    from ..backends.bitblas import patch_hqq_to_bitblas
+    from MiLo.backends.bitblas import patch_hqq_to_bitblas
 except Exception:
     patch_hqq_to_bitblas = None
     print(colored('Warning: failed to import the BitBlas backend. Check if BitBlas is correctly installed if you want to use the bitblas backend (https://github.com/microsoft/BitBLAS).','yellow'))
+
 try:
-   from ..backends.milo import patch_hqq_to_milo_asymmetric
-except Exception:
-       patch_hqq_to_milo_asymmetric = None
-       print(colored('Warning: failed to import the MiLo Asymmetric backend. Check if milo is correctly installed if you want to use the MiLo backend (in MiLo/kernels), please run setup.py install first.', 'yellow'))
-patch_hqq_to_milo_symmetric
+    from MiLo.backends.milo import patch_hqq_to_milo_asymmetric
+    print("Successfully imported patch_hqq_to_milo_asymmetric")
+except Exception as e:
+    print(f"Import error: {str(e)}")
+    print('Warning: failed to import the MiLo Asymmetric backend.')
+    print('Check if milo is correctly installed in MiLo/kernels.')
 try:
-   from ..backends.milo import patch_hqq_to_milo_symmetric
-except Exception:
-       patch_hqq_to_milo_symmetric = None
-       print(colored('Warning: failed to import the MiLo Symmetric backend. Check if milo is correctly installed if you want to use the MiLo backend (in MiLo/kernels), please run setup.py install first.', 'yellow'))
+   from MiLo.backends.milo import patch_hqq_to_milo_symmetric
+except Exception as e:
+    patch_hqq_to_milo_symmetric = None
+    print(f"Import error: {str(e)}")
+    print(colored('Warning: failed to import the MiLo Symmetric backend. Check if milo is correctly installed if you want to use the MiLo backend (in MiLo/kernels), please run setup.py install first.', 'yellow'))
 
 
 def patch_linearlayers(model, fct, patch_param=None, verbose=False):
+    print(f"Patching linear layers with function {fct.__name__}, verbose={verbose}")
     base_class = model.base_class if (hasattr(model, "base_class")) else AutoHQQHFModel
+    print(f"Base class: {base_class.__name__}")
     base_class.setup_model(model)
+    print(f"Linear tags: {model.linear_tags}")
     model.base_class.patch_linearlayers(
         model, fct, dict([(k, patch_param) for k in model.linear_tags]), verbose=verbose
     )
 
 
 def patch_add_quant_config(layer, patch_param):
-    if type(layer) is HQQLinear:
+    if type(layer) is MiLoLinear:
         layer.quant_config = patch_param
-    if type(layer) is HQQLinearLoRA:
-        layer.linear_layer.quant_config = patch_param
+    # if type(layer) is MiLoLinearLoRA:
+    #     layer.linear_layer.quant_config = patch_param
     return layer
 
 
@@ -73,14 +85,14 @@ def patch_hqq_inference(layer, patch_param):
             out += self.bias
         return out
 
-    if type(layer) is HQQLinear:
+    if type(layer) is MiLoLinear:
         layer.forward = lambda x: forward_hqq_inferece(layer, x)
 
-    if type(layer) is HQQLinearLoRA:
-        if type(layer.linear_layer) is HQQLinear:
-            layer.linear_layer.forward = lambda x: forward_hqq_inferece(
-                layer.linear_layer, x
-            )
+    # if type(layer) is MiLoLinearLoRA:
+    #     if type(layer.linear_layer) is MiLoLinear:
+    #         layer.linear_layer.forward = lambda x: forward_hqq_inferece(
+    #             layer.linear_layer, x
+    #         )
 
     return layer
 
@@ -91,8 +103,8 @@ def patch_lora_inference(layer, patch_param):
         out = torch.matmul(torch.matmul(x, self.lora_A), self.lora_B) * self.scaling
         return out
 
-    if type(layer) is HQQLinearLoRA:
-        layer.forward_lora = lambda x: forward_lora_inference(layer, x)
+    # if type(layer) is MiLoLinearLoRA:
+    #     layer.forward_lora = lambda x: forward_lora_inference(layer, x)
     return layer
 
 # Copied from https://github.com/pytorch/ao/blob/b523f9f9e15b6fb80d10f585d9cf45e0c5e4d10e/torchao/quantization/utils.py#L486-L501
@@ -141,6 +153,7 @@ def prepare_for_inference(model, allow_merge=False, backend="default", verbose=F
         patch_linearlayers(model, patch_hqq_to_milo_symmetric, verbose=verbose)
         cleanup()
     if backend == "milo_asymmetric" and (patch_hqq_to_milo_asymmetric is not None):
+        print("Applying patch_hqq_to_milo_asymmetric")
         patch_linearlayers(model, patch_hqq_to_milo_asymmetric, verbose=verbose)
         cleanup()
 
@@ -165,68 +178,68 @@ def get_lowrank_tuple_torch_gpu(tensor, max_rank, eps=None):
 
 
 # Merges HQQ's zeros with LoRA weights. ONLY works with group_size=None and axis=1
-def patch_merge_zeros_with_lora(layer, patch_params={"z_shift": 8, "keep_lora": False}):
-    if type(layer) is HQQLinearLoRA:
-        # Check config suppport
-        hqq_layer = layer.linear_layer
-        if (hqq_layer.meta["axis"] == 0) or (hqq_layer.meta["group_size"] is not None):
-            print('Skipping zeros lora merging for', layer.name)
-            return layer
+# def patch_merge_zeros_with_lora(layer, patch_params={"z_shift": 8, "keep_lora": False}):
+#     if type(layer) is MiLoLinearLoRA:
+#         # Check config suppport
+#         hqq_layer = layer.linear_layer
+#         if (hqq_layer.meta["axis"] == 0) or (hqq_layer.meta["group_size"] is not None):
+#             print('Skipping zeros lora merging for', layer.name)
+#             return layer
 
-        layer.z_shift = patch_params["z_shift"]
-        layer.keep_lora = patch_params["keep_lora"]
+#         layer.z_shift = patch_params["z_shift"]
+#         layer.keep_lora = patch_params["keep_lora"]
 
-        shape = layer.linear_layer.meta["shape"]
-        z = layer.linear_layer.meta["zero"]
-        s = layer.linear_layer.meta["scale"]
-        u = (s * (-z + layer.z_shift)).flatten().view([1, -1])
+#         shape = layer.linear_layer.meta["shape"]
+#         z = layer.linear_layer.meta["zero"]
+#         s = layer.linear_layer.meta["scale"]
+#         u = (s * (-z + layer.z_shift)).flatten().view([1, -1])
 
-        ###########################################
-        if layer.keep_lora is False:
-            A, B = layer.lora_A.data, layer.lora_B.data
-            onz = torch.ones((shape[1], 1), device=u.device, dtype=u.dtype)
+#         ###########################################
+#         if layer.keep_lora is False:
+#             A, B = layer.lora_A.data, layer.lora_B.data
+#             onz = torch.ones((shape[1], 1), device=u.device, dtype=u.dtype)
 
-            # Cat
-            A = torch.cat([A, onz], axis=1)
-            B = torch.cat([B, u], axis=0)
+#             # Cat
+#             A = torch.cat([A, onz], axis=1)
+#             B = torch.cat([B, u], axis=0)
 
-            # #Re-rank
-            # #A, B = get_lowrank_tuple_torch_gpu(torch.matmul(A, B) + torch.matmul(onz, u), max_rank=layer.r + 1)
+#             # #Re-rank
+#             # #A, B = get_lowrank_tuple_torch_gpu(torch.matmul(A, B) + torch.matmul(onz, u), max_rank=layer.r + 1)
 
-            layer.lora_A.data = A.to(dtype=layer.lora_A.dtype)
-            layer.lora_B.data = B.to(dtype=layer.lora_B.dtype)
+#             layer.lora_A.data = A.to(dtype=layer.lora_A.dtype)
+#             layer.lora_B.data = B.to(dtype=layer.lora_B.dtype)
 
-            layer.u = None
+#             layer.u = None
 
-        else:
-            layer.u = torch.nn.Parameter(u, requires_grad=False)
-        ###########################################
-        layer.linear_layer.meta["zero"] = 0.0
+#         else:
+#             layer.u = torch.nn.Parameter(u, requires_grad=False)
+#         ###########################################
+#         layer.linear_layer.meta["zero"] = 0.0
 
-        torch.cuda.empty_cache()
+#         torch.cuda.empty_cache()
 
-        def forward_linear_updated(self, x: Tensor) -> Tensor:
-            compute_dtype = self.linear_layer.compute_dtype
-            meta = self.linear_layer.meta
-            W_q = self.linear_layer.W_q
+#         def forward_linear_updated(self, x: Tensor) -> Tensor:
+#             compute_dtype = self.linear_layer.compute_dtype
+#             meta = self.linear_layer.meta
+#             W_q = self.linear_layer.W_q
 
-            W_r = Quantizer.unpack[meta["packing"]](W_q, dtype=compute_dtype).t()
-            scale = meta["scale"].t()
+#             W_r = Quantizer.unpack[meta["packing"]](W_q, dtype=compute_dtype).t()
+#             scale = meta["scale"].t()
 
-            out = torch.matmul(x, (W_r - self.z_shift)) * scale  # Symmetric quant
-            return out
+#             out = torch.matmul(x, (W_r - self.z_shift)) * scale  # Symmetric quant
+#             return out
 
-        layer.linear_layer.forward = lambda x: forward_linear_updated(layer, x)
+#         layer.linear_layer.forward = lambda x: forward_linear_updated(layer, x)
 
-        def forward_updated(self, x: Tensor) -> Tensor:
-            out = self.linear_layer.forward(x)
+#         def forward_updated(self, x: Tensor) -> Tensor:
+#             out = self.linear_layer.forward(x)
 
-            if self.u is not None:
-                out += torch.matmul(x.sum(axis=-1, keepdim=True), self.u)
+#             if self.u is not None:
+#                 out += torch.matmul(x.sum(axis=-1, keepdim=True), self.u)
 
-            out += self.forward_lora(x) + self.bias
-            return out
+#             out += self.forward_lora(x) + self.bias
+#             return out
 
-        layer.forward = lambda x: forward_updated(layer, x)
+#         layer.forward = lambda x: forward_updated(layer, x)
 
-    return layer
+#     return layer
